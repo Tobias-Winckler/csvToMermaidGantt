@@ -33,7 +33,9 @@ def parse_csv(csv_content: str) -> List[Dict[str, str]]:
     tasks = []
 
     for row in reader:
-        tasks.append(dict(row))
+        # Filter out empty rows where all values are empty strings
+        if any(value.strip() for value in row.values()):
+            tasks.append(dict(row))
 
     return tasks
 

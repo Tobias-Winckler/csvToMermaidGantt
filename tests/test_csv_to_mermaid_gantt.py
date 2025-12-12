@@ -68,6 +68,19 @@ Task 2,2024-01-04,2d"""
         assert result[0]["task_name"] == "Task 1"
         assert result[1]["task_name"] == "Task 2"
 
+    def test_parse_csv_with_all_empty_values(self) -> None:
+        """Test parsing CSV with rows that have all empty values."""
+        csv_content = """task_name,start_date,duration
+Task 1,2024-01-01,3d
+,,
+Task 2,2024-01-04,2d"""
+
+        result = parse_csv(csv_content)
+        # Rows with all empty values should be filtered out
+        assert len(result) == 2
+        assert result[0]["task_name"] == "Task 1"
+        assert result[1]["task_name"] == "Task 2"
+
 
 class TestValidateTask:
     """Tests for validate_task function."""
