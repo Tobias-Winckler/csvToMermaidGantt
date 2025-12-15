@@ -195,13 +195,13 @@ def generate_mermaid_gantt(
                 start_date = f"{start_date} {task['start_time'].strip()}"
             task_line += f", {start_date}"
 
-            if "duration" in task and task["duration"].strip():
-                task_line += f", {task['duration'].strip()}"
-            elif "end_date" in task and task["end_date"].strip():
+            if "end_date" in task and task["end_date"].strip():
                 end_date = task["end_date"].strip()
                 if has_time and "end_time" in task and task["end_time"].strip():
                     end_date = f"{end_date} {task['end_time'].strip()}"
                 task_line += f", {end_date}"
+            elif "duration" in task and task["duration"].strip():
+                task_line += f", {task['duration'].strip()}"
 
         lines.append(task_line)
 
