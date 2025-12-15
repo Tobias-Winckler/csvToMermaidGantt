@@ -423,6 +423,71 @@ Task 1,2025-12-12 07:59:00,2025-12-12 08:00:21,5d"""
         assert "2025-12-12 08:00:21" in result
         assert "5d" not in result
 
+    def test_convert_issue_csv_with_name_header(self) -> None:
+        """Test converting CSV from issue with Name header and extra column.
+        
+        This test covers the exact scenario from the reported issue where the CSV
+        has 'Name' as the header (not 'task_name') and includes an extra column
+        that doesn't have a corresponding header.
+        """
+        csv_content = """Name,start_timestamp,end_timestamp
+updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21,0:01:21"""
+
+        result = convert_csv_to_mermaid(csv_content)
+        assert "gantt" in result
+        assert "dateFormat YYYY-MM-DD HH:mm:ss" in result
+        assert "updTcpIpConnectState" in result
+        assert "2025-12-12 07:59:00" in result
+        assert "2025-12-12 08:00:21" in result
+
+    def test_convert_issue_csv_with_task_name_header(self) -> None:
+        """Test converting CSV from issue with task_name header and extra column.
+        
+        This test covers the second scenario from the reported issue where the CSV
+        uses 'task_name' as the header and includes an extra column.
+        """
+        csv_content = """task_name,start_timestamp,end_timestamp
+updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21,0:01:21"""
+
+        result = convert_csv_to_mermaid(csv_content)
+        assert "gantt" in result
+        assert "dateFormat YYYY-MM-DD HH:mm:ss" in result
+        assert "updTcpIpConnectState" in result
+        assert "2025-12-12 07:59:00" in result
+        assert "2025-12-12 08:00:21" in result
+
+    def test_convert_issue_csv_without_extra_column_name_header(self) -> None:
+        """Test converting CSV with Name header and no extra column.
+        
+        This test ensures that the basic case with just Name, start_timestamp,
+        and end_timestamp (3 columns total) works correctly.
+        """
+        csv_content = """Name,start_timestamp,end_timestamp
+updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21"""
+
+        result = convert_csv_to_mermaid(csv_content)
+        assert "gantt" in result
+        assert "dateFormat YYYY-MM-DD HH:mm:ss" in result
+        assert "updTcpIpConnectState" in result
+        assert "2025-12-12 07:59:00" in result
+        assert "2025-12-12 08:00:21" in result
+
+    def test_convert_issue_csv_without_extra_column_task_name_header(self) -> None:
+        """Test converting CSV with task_name header and no extra column.
+        
+        This test ensures that the basic case with task_name, start_timestamp,
+        and end_timestamp (3 columns total) works correctly.
+        """
+        csv_content = """task_name,start_timestamp,end_timestamp
+updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21"""
+
+        result = convert_csv_to_mermaid(csv_content)
+        assert "gantt" in result
+        assert "dateFormat YYYY-MM-DD HH:mm:ss" in result
+        assert "updTcpIpConnectState" in result
+        assert "2025-12-12 07:59:00" in result
+        assert "2025-12-12 08:00:21" in result
+
 
 class TestMain:
     """Tests for main CLI function."""
