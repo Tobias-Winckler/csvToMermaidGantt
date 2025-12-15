@@ -134,9 +134,7 @@ def parse_csv(csv_content: str) -> List[Dict[str, str]]:
     reader = csv.DictReader(lines)
     tasks = []
 
-    # Get the fieldnames from the CSV
-    fieldnames = reader.fieldnames
-    log_verbose(f"CSV headers detected: {fieldnames}")
+    log_verbose(f"CSV headers detected: {reader.fieldnames}")
 
     for idx, row in enumerate(reader):
         log_verbose(f"Processing row {idx + 1}: {dict(row)}")
