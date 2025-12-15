@@ -362,6 +362,22 @@ class TestGenerateMermaidGantt:
         assert "dateFormat YYYY-MM-DD HH:mm:ss" in result
         assert "Event 1 :event_1, 2024-01-01 12:00:00, 2024-01-01 13:00:00" in result
 
+    def test_generate_with_end_date_and_duration(self) -> None:
+        """Test that end_date takes priority over duration when both present."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "end_date": "2024-01-05",
+                "duration": "10d",
+            }
+        ]
+        result = generate_mermaid_gantt(tasks)
+
+        # Should use end_date, not duration
+        assert "Task 1 :task_1, 2024-01-01, 2024-01-05" in result
+        assert "10d" not in result
+
 
 class TestConvertCSVToMermaid:
     """Tests for convert_csv_to_mermaid function."""
@@ -394,6 +410,18 @@ Network Event,1704110400,1704110460"""
         assert "dateFormat YYYY-MM-DD HH:mm:ss" in result
         assert "File Access" in result
         assert "Network Event" in result
+
+    def test_convert_with_both_end_timestamp_and_duration(self) -> None:
+        """Test that end_timestamp takes priority over duration."""
+        csv_content = """Name,start_timestamp,end_timestamp,duration
+Task 1,2025-12-12 07:59:00,2025-12-12 08:00:21,5d"""
+
+        result = convert_csv_to_mermaid(csv_content)
+        assert "gantt" in result
+        assert "dateFormat YYYY-MM-DD HH:mm:ss" in result
+        # Should use end_timestamp, not duration
+        assert "2025-12-12 08:00:21" in result
+        assert "5d" not in result
 
 
 class TestMain:
