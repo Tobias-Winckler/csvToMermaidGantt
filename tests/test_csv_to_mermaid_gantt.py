@@ -218,13 +218,13 @@ class TestValidateTask:
     def test_validate_task_missing_name(self) -> None:
         """Test validating task with missing name."""
         task = {"start_date": "2024-01-01"}
-        with pytest.raises(ValueError, match="Missing required field: task_name"):
+        with pytest.raises(ValueError, match="Missing required field: 'task_name'"):
             validate_task(task)
 
     def test_validate_task_empty_name(self) -> None:
         """Test validating task with empty name."""
         task = {"task_name": "  ", "start_date": "2024-01-01"}
-        with pytest.raises(ValueError, match="Missing required field: task_name"):
+        with pytest.raises(ValueError, match="Missing required field: 'task_name'"):
             validate_task(task)
 
 
@@ -423,6 +423,83 @@ Task 1,2025-12-12 07:59:00,2025-12-12 08:00:21,5d"""
         assert "2025-12-12 08:00:21" in result
         assert "5d" not in result
 
+    def test_convert_issue_csv_with_name_header(self) -> None:
+        """Test converting CSV from issue with Name header and extra column.
+
+        This test covers the exact scenario from the reported issue where the CSV
+        has 'Name' as the header (not 'task_name') and includes an extra column
+        (0:01:21) that doesn't have a corresponding header.
+
+        Note: This is intentionally malformed CSV (4 comma-separated values in the
+        data row, but only 3 headers). The fourth comma-separated value (0:01:21)
+        appears after the third column. Python's csv.DictReader handles this by
+        creating a None key for extra values, which we gracefully ignore (see the
+        None key filtering in validate_task function at line 171).
+        """
+        csv_content = """Name,start_timestamp,end_timestamp
+updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21,0:01:21"""
+
+        result = convert_csv_to_mermaid(csv_content)
+        assert "gantt" in result
+        assert "dateFormat YYYY-MM-DD HH:mm:ss" in result
+        assert "updTcpIpConnectState" in result
+        assert "2025-12-12 07:59:00" in result
+        assert "2025-12-12 08:00:21" in result
+
+    def test_convert_issue_csv_with_task_name_header(self) -> None:
+        """Test converting CSV from issue with task_name header and extra column.
+
+        This test covers the second scenario from the reported issue where the CSV
+        uses 'task_name' as the header and includes an extra column (0:01:21).
+
+        Note: This is intentionally malformed CSV (4 comma-separated values in the
+        data row, but only 3 headers). The fourth comma-separated value (0:01:21)
+        appears after the third column. Python's csv.DictReader handles this by
+        creating a None key for extra values, which we gracefully ignore (see the
+        None key filtering in validate_task function at line 171).
+        """
+        csv_content = """task_name,start_timestamp,end_timestamp
+updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21,0:01:21"""
+
+        result = convert_csv_to_mermaid(csv_content)
+        assert "gantt" in result
+        assert "dateFormat YYYY-MM-DD HH:mm:ss" in result
+        assert "updTcpIpConnectState" in result
+        assert "2025-12-12 07:59:00" in result
+        assert "2025-12-12 08:00:21" in result
+
+    def test_convert_issue_csv_without_extra_column_name_header(self) -> None:
+        """Test converting CSV with Name header and no extra column.
+
+        This test ensures that the basic case with just Name, start_timestamp,
+        and end_timestamp (3 columns total) works correctly.
+        """
+        csv_content = """Name,start_timestamp,end_timestamp
+updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21"""
+
+        result = convert_csv_to_mermaid(csv_content)
+        assert "gantt" in result
+        assert "dateFormat YYYY-MM-DD HH:mm:ss" in result
+        assert "updTcpIpConnectState" in result
+        assert "2025-12-12 07:59:00" in result
+        assert "2025-12-12 08:00:21" in result
+
+    def test_convert_issue_csv_without_extra_column_task_name_header(self) -> None:
+        """Test converting CSV with task_name header and no extra column.
+
+        This test ensures that the basic case with task_name, start_timestamp,
+        and end_timestamp (3 columns total) works correctly.
+        """
+        csv_content = """task_name,start_timestamp,end_timestamp
+updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21"""
+
+        result = convert_csv_to_mermaid(csv_content)
+        assert "gantt" in result
+        assert "dateFormat YYYY-MM-DD HH:mm:ss" in result
+        assert "updTcpIpConnectState" in result
+        assert "2025-12-12 07:59:00" in result
+        assert "2025-12-12 08:00:21" in result
+
 
 class TestMain:
     """Tests for main CLI function."""
@@ -484,6 +561,32 @@ Task 1,2024-01-01,3d"""
                     output = mock_stdout.getvalue()
                     assert "gantt" in output
                     assert "Task 1" in output
+
+    def test_main_with_verbose_flag(self) -> None:
+        """Test main function with verbose flag."""
+        csv_content = """Name,start_timestamp,end_timestamp
+Task 1,2024-01-01T12:00:00,2024-01-01T13:00:00"""
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f:
+            f.write(csv_content)
+            temp_file = f.name
+
+        try:
+            with patch(
+                "sys.argv", ["csv_to_mermaid_gantt", temp_file, "--verbose"]
+            ):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+                        main()
+                        output = mock_stdout.getvalue()
+                        stderr = mock_stderr.getvalue()
+                        assert "gantt" in output
+                        assert "Task 1" in output
+                        # Check for verbose output in stderr
+                        assert "[DEBUG]" in stderr
+                        assert "CSV headers detected" in stderr
+        finally:
+            os.unlink(temp_file)
 
     def test_main_with_custom_title(self) -> None:
         """Test main function with custom title."""

@@ -52,6 +52,22 @@ csv-to-mermaid-gantt input.csv -o output.md
 cat input.csv | csv-to-mermaid-gantt > output.md
 ```
 
+### Verbose mode for debugging
+
+Use the `--verbose` or `-v` flag to see detailed parsing information:
+
+```bash
+csv-to-mermaid-gantt input.csv --verbose
+```
+
+This will show:
+- CSV headers detected
+- Field normalization (e.g., `Name` → `task_name`)
+- Timestamp parsing details
+- Number of tasks processed
+
+Useful for troubleshooting CSV format issues.
+
 ### As a Python module
 
 ```python
