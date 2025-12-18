@@ -1,8 +1,9 @@
 """Tests for CSV to Mermaid Gantt Chart Converter."""
 
+import codecs
+import os
 import pytest
 import tempfile
-import os
 from csv_to_mermaid_gantt import (
     parse_csv,
     parse_timestamp,
@@ -13,8 +14,8 @@ from csv_to_mermaid_gantt import (
     convert_csv_to_mermaid,
     main,
 )
-from unittest.mock import patch
 from io import StringIO
+from unittest.mock import patch
 
 
 class TestParseCSV:
@@ -648,36 +649,14 @@ Task 1,2024-01-01,3d"""
         finally:
             os.unlink(temp_file)
 
-    def test_main_with_utf8_bom_task_name_header(self) -> None:
-        """Test main function with UTF-8 BOM in CSV file (task_name header)."""
-        import codecs
-
-        csv_content = """task_name,start_timestamp,end_timestamp
-updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21"""
-
-        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".csv") as f:
-            # Write UTF-8 BOM followed by CSV content
-            f.write(codecs.BOM_UTF8)
-            f.write(csv_content.encode("utf-8"))
-            temp_file = f.name
-
-        try:
-            with patch("sys.argv", ["csv_to_mermaid_gantt", temp_file]):
-                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
-                    main()
-                    output = mock_stdout.getvalue()
-                    assert "gantt" in output
-                    assert "updTcpIpConnectState" in output
-                    assert "2025-12-12 07:59:00" in output
-                    assert "2025-12-12 08:00:21" in output
-        finally:
-            os.unlink(temp_file)
-
-    def test_main_with_utf8_bom_name_header(self) -> None:
-        """Test main function with UTF-8 BOM in CSV file (Name header)."""
-        import codecs
-
-        csv_content = """Name,start_timestamp,end_timestamp
+    @pytest.mark.parametrize(
+        "header_name",
+        ["task_name", "Name"],
+        ids=["task_name_header", "Name_header"],
+    )
+    def test_main_with_utf8_bom(self, header_name: str) -> None:
+        """Test main function with UTF-8 BOM in CSV file."""
+        csv_content = f"""{header_name},start_timestamp,end_timestamp
 updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21"""
 
         with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".csv") as f:
