@@ -199,15 +199,22 @@ def generate_mermaid_gantt(
         tasks: List of task dictionaries
         title: Title for the Gantt chart
         width: Optional width in pixels for the diagram (helps with narrow diagrams)
+               Must be between 100 and 10000 pixels
 
     Returns:
         Mermaid Gantt chart as a string
 
     Raises:
-        ValueError: If tasks list is empty or task data is invalid
+        ValueError: If tasks list is empty or task data is invalid,
+                    or if width is out of valid range
     """
     if not tasks:
         raise ValueError("No tasks provided")
+
+    # Validate width parameter
+    if width is not None:
+        if not isinstance(width, int) or width < 100 or width > 10000:
+            raise ValueError("Width must be an integer between 100 and 10000 pixels")
 
     # Determine if we need time precision based on whether start_time or end_time exist
     has_time = any("start_time" in task or "end_time" in task for task in tasks)
@@ -215,9 +222,12 @@ def generate_mermaid_gantt(
     # Add configuration directive if width is specified
     lines = []
     if width is not None:
+        # Use Mermaid's themeVariables to set section heights which affects layout
+        # This helps with rendering when exporting to PNG/SVG
         config = (
             f"%%{{init: {{'theme':'default', "
-            f"'themeVariables': {{'ganttWidth': '{width}px'}}}}}}%%"
+            f"'themeVariables': {{'fontSize': '16px'}}, "
+            f"'gantt': {{'useWidth': {width}}}}}}}%%"
         )
         lines.append(config)
 
