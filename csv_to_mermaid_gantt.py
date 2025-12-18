@@ -191,13 +191,14 @@ def format_task_id(task_name: str) -> str:
 
 
 def generate_mermaid_gantt(
-    tasks: List[Dict[str, str]], title: str = "Gantt Chart"
+    tasks: List[Dict[str, str]], title: str = "Gantt Chart", width: Optional[int] = None
 ) -> str:
     """Generate Mermaid Gantt chart from task data.
 
     Args:
         tasks: List of task dictionaries
         title: Title for the Gantt chart
+        width: Optional width in pixels for the diagram (helps with narrow diagrams)
 
     Returns:
         Mermaid Gantt chart as a string
@@ -211,10 +212,21 @@ def generate_mermaid_gantt(
     # Determine if we need time precision based on whether start_time or end_time exist
     has_time = any("start_time" in task or "end_time" in task for task in tasks)
 
+    # Add configuration directive if width is specified
+    lines = []
+    if width is not None:
+        config = (
+            f"%%{{init: {{'theme':'default', "
+            f"'themeVariables': {{'ganttWidth': '{width}px'}}}}}}%%"
+        )
+        lines.append(config)
+
     if has_time:
-        lines = ["gantt", f"    title {title}", "    dateFormat YYYY-MM-DD HH:mm:ss"]
+        lines.extend(
+            ["gantt", f"    title {title}", "    dateFormat YYYY-MM-DD HH:mm:ss"]
+        )
     else:
-        lines = ["gantt", f"    title {title}", "    dateFormat YYYY-MM-DD"]
+        lines.extend(["gantt", f"    title {title}", "    dateFormat YYYY-MM-DD"])
 
     for task in tasks:
         validate_task(task)
@@ -252,7 +264,10 @@ def generate_mermaid_gantt(
 
 
 def convert_csv_to_mermaid(
-    csv_content: str, title: str = "Gantt Chart", verbose: bool = False
+    csv_content: str,
+    title: str = "Gantt Chart",
+    verbose: bool = False,
+    width: Optional[int] = None,
 ) -> str:
     """Convert CSV content to Mermaid Gantt chart.
 
@@ -260,6 +275,7 @@ def convert_csv_to_mermaid(
         csv_content: CSV formatted string with task data
         title: Title for the Gantt chart
         verbose: Whether to print verbose logging messages
+        width: Optional width in pixels for the diagram (helps with narrow diagrams)
 
     Returns:
         Mermaid Gantt chart as a string
@@ -268,7 +284,7 @@ def convert_csv_to_mermaid(
         ValueError: If CSV format is invalid or task data is invalid
     """
     tasks = parse_csv(csv_content, verbose)
-    return generate_mermaid_gantt(tasks, title)
+    return generate_mermaid_gantt(tasks, title, width)
 
 
 def main() -> None:
@@ -296,6 +312,15 @@ def main() -> None:
         action="store_true",
         help="Enable verbose output for debugging",
     )
+    parser.add_argument(
+        "-w",
+        "--width",
+        type=int,
+        help=(
+            "Diagram width in pixels "
+            "(helps with narrow diagrams when there are many tasks)"
+        ),
+    )
 
     args = parser.parse_args()
     verbose = args.verbose
@@ -318,7 +343,9 @@ def main() -> None:
 
         # Convert
         log_verbose("Starting CSV to Mermaid conversion", verbose)
-        mermaid_output = convert_csv_to_mermaid(csv_content, args.title, verbose)
+        mermaid_output = convert_csv_to_mermaid(
+            csv_content, args.title, verbose, args.width
+        )
         log_verbose("Conversion successful", verbose)
 
         # Write output

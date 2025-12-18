@@ -379,6 +379,25 @@ class TestGenerateMermaidGantt:
         assert "Task 1 :task_1, 2024-01-01, 2024-01-05" in result
         assert "10d" not in result
 
+    def test_generate_with_width(self) -> None:
+        """Test generating Gantt chart with custom width."""
+        tasks = [{"task_name": "Task 1", "start_date": "2024-01-01", "duration": "3d"}]
+        result = generate_mermaid_gantt(tasks, width=2000)
+
+        assert "%%{init:" in result
+        assert "'ganttWidth': '2000px'" in result
+        assert "gantt" in result
+        assert "Task 1 :task_1, 2024-01-01, 3d" in result
+
+    def test_generate_without_width(self) -> None:
+        """Test generating Gantt chart without width (default behavior)."""
+        tasks = [{"task_name": "Task 1", "start_date": "2024-01-01", "duration": "3d"}]
+        result = generate_mermaid_gantt(tasks)
+
+        assert "%%{init:" not in result
+        assert "gantt" in result
+        assert "Task 1 :task_1, 2024-01-01, 3d" in result
+
 
 class TestConvertCSVToMermaid:
     """Tests for convert_csv_to_mermaid function."""
@@ -500,6 +519,17 @@ updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21"""
         assert "updTcpIpConnectState" in result
         assert "2025-12-12 07:59:00" in result
         assert "2025-12-12 08:00:21" in result
+
+    def test_convert_with_width(self) -> None:
+        """Test converting CSV with custom width."""
+        csv_content = """task_name,start_date,duration
+Task 1,2024-01-01,3d"""
+
+        result = convert_csv_to_mermaid(csv_content, width=1500)
+        assert "%%{init:" in result
+        assert "'ganttWidth': '1500px'" in result
+        assert "gantt" in result
+        assert "Task 1" in result
 
 
 class TestMain:
@@ -674,5 +704,26 @@ updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21"""
                     assert "updTcpIpConnectState" in output
                     assert "2025-12-12 07:59:00" in output
                     assert "2025-12-12 08:00:21" in output
+        finally:
+            os.unlink(temp_file)
+
+    def test_main_with_width_flag(self) -> None:
+        """Test main function with width flag."""
+        csv_content = """task_name,start_date,duration
+Task 1,2024-01-01,3d"""
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f:
+            f.write(csv_content)
+            temp_file = f.name
+
+        try:
+            with patch("sys.argv", ["csv_to_mermaid_gantt", temp_file, "-w", "2000"]):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    main()
+                    output = mock_stdout.getvalue()
+                    assert "%%{init:" in output
+                    assert "'ganttWidth': '2000px'" in output
+                    assert "gantt" in output
+                    assert "Task 1" in output
         finally:
             os.unlink(temp_file)
