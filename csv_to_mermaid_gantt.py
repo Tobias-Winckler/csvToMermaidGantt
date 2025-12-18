@@ -68,9 +68,7 @@ def parse_timestamp(timestamp_str: str) -> Optional[datetime]:
     return None
 
 
-def normalize_task_dict(
-    task: Dict[str, str], verbose: bool = False
-) -> Dict[str, str]:
+def normalize_task_dict(task: Dict[str, str], verbose: bool = False) -> Dict[str, str]:
     """Normalize task dictionary to use consistent field names.
 
     Converts 'Name' to 'task_name' and timestamp fields to date fields.
@@ -89,8 +87,7 @@ def normalize_task_dict(
     if "Name" in normalized and "task_name" not in normalized:
         normalized["task_name"] = normalized["Name"]
         log_verbose(
-            f"Converted 'Name' field to 'task_name': {normalized['task_name']}",
-            verbose
+            f"Converted 'Name' field to 'task_name': {normalized['task_name']}", verbose
         )
 
     # Handle timestamp-based format (Name,start_timestamp,end_timestamp)
@@ -103,7 +100,7 @@ def normalize_task_dict(
             log_verbose(
                 f"Parsed start_timestamp: "
                 f"{normalized['start_date']} {normalized['start_time']}",
-                verbose
+                verbose,
             )
 
     if "end_timestamp" in normalized:
@@ -114,7 +111,7 @@ def normalize_task_dict(
             log_verbose(
                 f"Parsed end_timestamp: "
                 f"{normalized['end_date']} {normalized['end_time']}",
-                verbose
+                verbose,
             )
 
     return normalized
@@ -307,7 +304,7 @@ def main() -> None:
         # Read input
         if args.input_file:
             log_verbose(f"Reading input from file: {args.input_file}", verbose)
-            with open(args.input_file, "r", encoding="utf-8") as f:
+            with open(args.input_file, "r", encoding="utf-8-sig") as f:
                 csv_content = f.read()
         else:
             log_verbose("Reading input from stdin", verbose)
@@ -316,14 +313,12 @@ def main() -> None:
         log_verbose(
             f"Input CSV content: {len(csv_content)} bytes, "
             f"{len(csv_content.splitlines())} lines",
-            verbose
+            verbose,
         )
 
         # Convert
         log_verbose("Starting CSV to Mermaid conversion", verbose)
-        mermaid_output = convert_csv_to_mermaid(
-            csv_content, args.title, verbose
-        )
+        mermaid_output = convert_csv_to_mermaid(csv_content, args.title, verbose)
         log_verbose("Conversion successful", verbose)
 
         # Write output

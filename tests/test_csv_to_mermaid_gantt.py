@@ -572,9 +572,7 @@ Task 1,2024-01-01T12:00:00,2024-01-01T13:00:00"""
             temp_file = f.name
 
         try:
-            with patch(
-                "sys.argv", ["csv_to_mermaid_gantt", temp_file, "--verbose"]
-            ):
+            with patch("sys.argv", ["csv_to_mermaid_gantt", temp_file, "--verbose"]):
                 with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
                     with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
                         main()
@@ -647,5 +645,55 @@ Task 1,2024-01-01,3d"""
                             main()
                         assert exc_info.value.code == 1
                         assert "Unexpected error" in mock_stderr.getvalue()
+        finally:
+            os.unlink(temp_file)
+
+    def test_main_with_utf8_bom_task_name_header(self) -> None:
+        """Test main function with UTF-8 BOM in CSV file (task_name header)."""
+        import codecs
+
+        csv_content = """task_name,start_timestamp,end_timestamp
+updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21"""
+
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".csv") as f:
+            # Write UTF-8 BOM followed by CSV content
+            f.write(codecs.BOM_UTF8)
+            f.write(csv_content.encode("utf-8"))
+            temp_file = f.name
+
+        try:
+            with patch("sys.argv", ["csv_to_mermaid_gantt", temp_file]):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    main()
+                    output = mock_stdout.getvalue()
+                    assert "gantt" in output
+                    assert "updTcpIpConnectState" in output
+                    assert "2025-12-12 07:59:00" in output
+                    assert "2025-12-12 08:00:21" in output
+        finally:
+            os.unlink(temp_file)
+
+    def test_main_with_utf8_bom_name_header(self) -> None:
+        """Test main function with UTF-8 BOM in CSV file (Name header)."""
+        import codecs
+
+        csv_content = """Name,start_timestamp,end_timestamp
+updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21"""
+
+        with tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=".csv") as f:
+            # Write UTF-8 BOM followed by CSV content
+            f.write(codecs.BOM_UTF8)
+            f.write(csv_content.encode("utf-8"))
+            temp_file = f.name
+
+        try:
+            with patch("sys.argv", ["csv_to_mermaid_gantt", temp_file]):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    main()
+                    output = mock_stdout.getvalue()
+                    assert "gantt" in output
+                    assert "updTcpIpConnectState" in output
+                    assert "2025-12-12 07:59:00" in output
+                    assert "2025-12-12 08:00:21" in output
         finally:
             os.unlink(temp_file)
