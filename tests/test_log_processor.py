@@ -236,9 +236,16 @@ class TestMatchConnectionEvents:
         ]
 
         result = match_connection_events(log_entries)
-        # Should merge all events for the same connection ID
-        # This is a limitation of the current simple implementation
-        assert len(result) >= 1
+        # Should create two separate connections due to reuse detection
+        assert len(result) == 2
+        # First connection: processName.exe
+        assert "processName.exe" in result[0]["Name"]
+        assert result[0]["start_timestamp"] == "2025-12-18 13:00:54"
+        assert result[0]["end_timestamp"] == "2025-12-18 13:00:56"
+        # Second connection: anotherProcess.exe (reusing same identifier)
+        assert "anotherProcess.exe" in result[1]["Name"]
+        assert result[1]["start_timestamp"] == "2025-12-18 13:05:00"
+        assert result[1]["end_timestamp"] == "2025-12-18 13:05:30"
 
     def test_match_multiple_different_connections(self) -> None:
         """Test matching multiple different connections."""
@@ -385,7 +392,7 @@ class TestConvertLogToCsv:
 18/12/2025,13.00.54,Added,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
 18/12/2025,13.00.56,Removed,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
 18/12/2025,13.01.00,Added,anotherProcess.exe,TCP,10.10.0.1:58101,123.123.123.123:443
-18/12/2025,13.01.30,Removed,anotherProcess.exe,TCP,10.10.0.1:58101,123.123.123.123:443"""
+18/12/2025,13.01.30,Removed,anotherProcess.exe,TCP,10.10.0.1:58101,123.123.123.123:443"""  # noqa: E501
 
         result = convert_log_to_csv(log_content)
         lines = result.split("\n")

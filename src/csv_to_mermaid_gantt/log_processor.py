@@ -86,13 +86,21 @@ def match_connection_events(log_entries: List[Dict[str, str]]) -> List[Dict[str,
     """Match Added and Removed events for connections.
 
     Each connection is identified by local_ip:local_port,remote_ip:remote_port.
-    For complete connections, we expect:
-    - 2 Added events (one for process, one for Unknown)
-    - 2 Removed events (one for process, one for Unknown)
+    Expected order for one connection entry:
+    - Added processName.exe
+    - Added Unknown
+    - Removed processName.exe
+    - Removed Unknown
+
+    Connection identifiers may be reused after removal, so we detect connection
+    boundaries by tracking when we transition from Removed events back to Added
+    events for the same connection identifier.
 
     Incomplete connections (due to log cutoff) are handled:
-    - Removed events without matching Added events (connection started before logging)
-    - Added events without matching Removed events (connection ongoing at log end)
+    - Removed events without matching Added events (connection started before
+      logging)
+    - Added events without matching Removed events (connection ongoing at log
+      end)
 
     Args:
         log_entries: List of log entry dictionaries
@@ -100,146 +108,154 @@ def match_connection_events(log_entries: List[Dict[str, str]]) -> List[Dict[str,
     Returns:
         List of matched connection dictionaries with start/end timestamps
     """
-    # Track connections by their identifier
-    # Each connection will have: added_events (list), removed_events (list),
-    # processed (bool)
-    connections: Dict[str, Dict[str, List[Dict[str, str]] | bool]] = {}
-    connection_order: List[str] = []  # Track order of first appearance
+    # Process events in order and detect connection boundaries
+    result = []
+    # Track active connections: conn_id -> {added_events, removed_events}
+    active_connections: Dict[str, Dict[str, List[Dict[str, str]]]] = {}
 
     for entry in log_entries:
         # Extract connection identifier
         local_addr = entry.get("LocalAddr", "")
         remote_addr = entry.get("RemoteAddr", "")
         conn_id = extract_connection_id(local_addr, remote_addr)
-
         action = entry.get("Action", "").strip()
 
-        # Initialize connection tracking if not seen before
-        if conn_id not in connections:
-            connections[conn_id] = {
+        # Initialize connection if not seen before
+        if conn_id not in active_connections:
+            active_connections[conn_id] = {
                 "added_events": [],
                 "removed_events": [],
-                "processed": False,
             }
-            connection_order.append(conn_id)
 
-        # Store event
-        conn = connections[conn_id]
-        if action == "Added":
-            added_list = conn["added_events"]
-            assert isinstance(added_list, list)
-            added_list.append(entry)
+        conn = active_connections[conn_id]
+
+        # Detect connection reuse: if we see an Added event and we already
+        # have Removed events, this is a new connection
+        if action == "Added" and conn["removed_events"]:
+            # Complete the previous connection
+            completed_conn = _create_connection_entry(
+                conn_id, conn["added_events"], conn["removed_events"]
+            )
+            if completed_conn:
+                result.append(completed_conn)
+
+            # Start a new connection
+            active_connections[conn_id] = {
+                "added_events": [entry],
+                "removed_events": [],
+            }
+        elif action == "Added":
+            conn["added_events"].append(entry)
         elif action == "Removed":
-            removed_list = conn["removed_events"]
-            assert isinstance(removed_list, list)
-            removed_list.append(entry)
+            conn["removed_events"].append(entry)
 
-    # Convert matched connections to output format
-    result = []
+    # Process remaining active connections
+    for conn_id, conn in active_connections.items():
+        completed_conn = _create_connection_entry(
+            conn_id, conn["added_events"], conn["removed_events"]
+        )
+        if completed_conn:
+            result.append(completed_conn)
 
-    for conn_id in connection_order:
-        conn_data = connections[conn_id]
-        added_events_raw = conn_data["added_events"]
-        removed_events_raw = conn_data["removed_events"]
-        processed = conn_data["processed"]
+    return result
 
-        # Type narrow to list
-        assert isinstance(added_events_raw, list)
-        assert isinstance(removed_events_raw, list)
-        assert isinstance(processed, bool)
 
-        added_events: List[Dict[str, str]] = added_events_raw
-        removed_events: List[Dict[str, str]] = removed_events_raw
+def _create_connection_entry(
+    conn_id: str,
+    added_events: List[Dict[str, str]],
+    removed_events: List[Dict[str, str]],
+) -> Optional[Dict[str, str]]:
+    """Create a connection entry from Added and Removed events.
 
-        # Skip if already processed
-        if processed:
-            continue
+    Args:
+        conn_id: Connection identifier
+        added_events: List of Added events for this connection
+        removed_events: List of Removed events for this connection
 
-        # Get timestamps
-        start_time: Optional[datetime] = None
-        end_time: Optional[datetime] = None
-        process_name = "Unknown"
+    Returns:
+        Dictionary with Name, start_timestamp, end_timestamp or None if no
+        valid timestamps
+    """
+    # Get timestamps
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    process_name = "Unknown"
 
-        # Find earliest Added event for start time
-        if added_events:
-            for event in added_events:
-                dt = parse_log_timestamp(event.get("Date", ""), event.get("Time", ""))
-                if dt:
-                    if start_time is None or dt < start_time:
-                        start_time = dt
-                    # Prefer non-Unknown process names
+    # Find earliest Added event for start time
+    if added_events:
+        for event in added_events:
+            dt = parse_log_timestamp(event.get("Date", ""), event.get("Time", ""))
+            if dt:
+                if start_time is None or dt < start_time:
+                    start_time = dt
+                # Prefer non-Unknown process names
+                proc = event.get("Process", "Unknown").strip()
+                if proc and proc != "Unknown":
+                    process_name = proc
+
+    # Find latest Removed event for end time
+    if removed_events:
+        for event in removed_events:
+            dt = parse_log_timestamp(event.get("Date", ""), event.get("Time", ""))
+            if dt:
+                if end_time is None or dt > end_time:
+                    end_time = dt
+                # Prefer non-Unknown process names if we don't have one yet
+                if process_name == "Unknown":
                     proc = event.get("Process", "Unknown").strip()
                     if proc and proc != "Unknown":
                         process_name = proc
 
-        # Find latest Removed event for end time
-        if removed_events:
-            for event in removed_events:
-                dt = parse_log_timestamp(event.get("Date", ""), event.get("Time", ""))
-                if dt:
-                    if end_time is None or dt > end_time:
-                        end_time = dt
-                    # Prefer non-Unknown process names if we don't have one yet
-                    if process_name == "Unknown":
-                        proc = event.get("Process", "Unknown").strip()
-                        if proc and proc != "Unknown":
-                            process_name = proc
+    # Handle incomplete connections
+    # If we have Added but no Removed (connection ongoing at log end)
+    if start_time and not end_time:
+        # Use the latest Added event timestamp as end time
+        end_time = start_time
 
-        # Handle incomplete connections
-        # If we have Added but no Removed (connection ongoing at log end)
-        if start_time and not end_time:
-            # Use the latest Added event timestamp as end time
-            end_time = start_time
+    # If we have Removed but no Added (connection started before logging)
+    if end_time and not start_time:
+        # Find the earliest Removed event for start time
+        for event in removed_events:
+            dt = parse_log_timestamp(event.get("Date", ""), event.get("Time", ""))
+            if dt:
+                if start_time is None or dt < start_time:
+                    start_time = dt
+        # If still no start_time, use end_time
+        if not start_time:
+            start_time = end_time
 
-        # If we have Removed but no Added (connection started before logging)
-        if end_time and not start_time:
-            # Find the earliest Removed event for start time
-            for event in removed_events:
-                dt = parse_log_timestamp(event.get("Date", ""), event.get("Time", ""))
-                if dt:
-                    if start_time is None or dt < start_time:
-                        start_time = dt
-            # If still no start_time, use end_time
-            if not start_time:
-                start_time = end_time
+    # Only include connections with at least one timestamp
+    if not (start_time or end_time):
+        return None
 
-        # Only include connections with at least one timestamp
-        if start_time or end_time:
-            # Ensure both timestamps exist
-            if not start_time:
-                start_time = end_time
-            if not end_time:
-                end_time = start_time
+    # Ensure both timestamps exist
+    if not start_time:
+        start_time = end_time
+    if not end_time:
+        end_time = start_time
 
-            # Type narrowing: at this point, both are not None
-            assert start_time is not None
-            assert end_time is not None
+    # Type narrowing: at this point, both are not None
+    assert start_time is not None
+    assert end_time is not None
 
-            # Get protocol and addresses for the task name
-            protocol = ""
-            if added_events:
-                protocol = added_events[0].get("Protocol", "TCP")
-            elif removed_events:
-                protocol = removed_events[0].get("Protocol", "TCP")
+    # Get protocol and addresses for the task name
+    protocol = ""
+    if added_events:
+        protocol = added_events[0].get("Protocol", "TCP")
+    elif removed_events:
+        protocol = removed_events[0].get("Protocol", "TCP")
 
-            local_addr = conn_id.split(",")[0] if "," in conn_id else ""
-            remote_addr = conn_id.split(",")[1] if "," in conn_id else ""
+    local_addr = conn_id.split(",")[0] if "," in conn_id else ""
+    remote_addr = conn_id.split(",")[1] if "," in conn_id else ""
 
-            # Create task name combining process, protocol, and
-            # connection info
-            task_name = f"{process_name} ({protocol}): {local_addr} -> {remote_addr}"
+    # Create task name combining process, protocol, and connection info
+    task_name = f"{process_name} ({protocol}): {local_addr} -> {remote_addr}"
 
-            result.append(
-                {
-                    "Name": task_name,
-                    "start_timestamp": start_time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "end_timestamp": end_time.strftime("%Y-%m-%d %H:%M:%S"),
-                }
-            )
-
-        connections[conn_id]["processed"] = True
-
-    return result
+    return {
+        "Name": task_name,
+        "start_timestamp": start_time.strftime("%Y-%m-%d %H:%M:%S"),
+        "end_timestamp": end_time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
 
 
 def convert_log_to_csv(log_content: str) -> str:
