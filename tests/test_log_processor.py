@@ -476,5 +476,17 @@ class TestConvertLogToCsv:
             # Check that conversion still works
             lines = result.splitlines()
             assert len(lines) == 2  # Header + 1 connection
+
+            # Verify CSV structure
+            assert lines[0] == "Name,start_timestamp,end_timestamp"
+
+            # Verify the connection data contains expected elements
+            connection_line = lines[1]
+            assert "processName.exe" in connection_line
+            assert "TCP" in connection_line
+            assert "10.10.0.1:58100" in connection_line
+            assert "123.123.123.123:443" in connection_line
+            assert "2025-12-18 13:00:54" in connection_line
+            assert "2025-12-18 13:00:56" in connection_line
         finally:
             sys.stderr = old_stderr
