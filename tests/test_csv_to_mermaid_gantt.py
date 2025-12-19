@@ -12,6 +12,7 @@ from csv_to_mermaid_gantt import (
     format_task_id,
     generate_mermaid_gantt,
     convert_csv_to_mermaid,
+    combine_tasks_by_name,
     main,
 )
 from io import StringIO
@@ -227,6 +228,309 @@ class TestValidateTask:
         task = {"task_name": "  ", "start_date": "2024-01-01"}
         with pytest.raises(ValueError, match="Missing required field: 'task_name'"):
             validate_task(task)
+
+
+class TestCombineTasksByName:
+    """Tests for combine_tasks_by_name function."""
+
+    def test_combine_empty_list(self) -> None:
+        """Test combining with empty task list."""
+        result = combine_tasks_by_name([])
+        assert result == []
+
+    def test_combine_single_task(self) -> None:
+        """Test combining with single task."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:00:00",
+                "end_date": "2024-01-01",
+                "end_time": "11:00:00",
+            }
+        ]
+        result = combine_tasks_by_name(tasks)
+        assert len(result) == 1
+        assert result[0]["task_name"] == "Task 1"
+
+    def test_combine_different_names(self) -> None:
+        """Test that tasks with different names are not combined."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:00:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:00:30",
+            },
+            {
+                "task_name": "Task 2",
+                "start_date": "2024-01-01",
+                "start_time": "10:00:35",
+                "end_date": "2024-01-01",
+                "end_time": "10:01:00",
+            },
+        ]
+        result = combine_tasks_by_name(tasks)
+        assert len(result) == 2
+
+    def test_combine_same_name_within_threshold(self) -> None:
+        """Test combining tasks with same name within threshold."""
+        tasks = [
+            {
+                "task_name": "updTcpIpConnectState",
+                "start_date": "2024-01-01",
+                "start_time": "10:00:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:00:30",
+            },
+            {
+                "task_name": "updTcpIpConnectState",
+                "start_date": "2024-01-01",
+                "start_time": "10:01:20",
+                "end_date": "2024-01-01",
+                "end_time": "10:02:00",
+            },
+        ]
+        result = combine_tasks_by_name(tasks, threshold_seconds=60)
+        # Gap is 50 seconds (10:01:20 - 10:00:30), which is <= 60, so they combine
+        assert len(result) == 1
+        assert result[0]["task_name"] == "updTcpIpConnectState"
+        assert result[0]["start_date"] == "2024-01-01"
+        assert result[0]["start_time"] == "10:00:00"
+        assert result[0]["end_date"] == "2024-01-01"
+        assert result[0]["end_time"] == "10:02:00"
+
+    def test_combine_same_name_exceeds_threshold(self) -> None:
+        """Test that tasks with same name exceeding threshold are not combined."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:00:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:00:30",
+            },
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:02:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:03:00",
+            },
+        ]
+        result = combine_tasks_by_name(tasks, threshold_seconds=60)
+        # Gap is 90 seconds (10:02:00 - 10:00:30), which is > 60, so they don't combine
+        assert len(result) == 2
+
+    def test_combine_three_tasks_all_within_threshold(self) -> None:
+        """Test combining three tasks all within threshold."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:00:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:00:30",
+            },
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:01:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:01:30",
+            },
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:02:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:02:30",
+            },
+        ]
+        result = combine_tasks_by_name(tasks, threshold_seconds=60)
+        # All gaps are 30 seconds, so all three should combine into one
+        assert len(result) == 1
+        assert result[0]["start_time"] == "10:00:00"
+        assert result[0]["end_time"] == "10:02:30"
+
+    def test_combine_three_tasks_mixed_thresholds(self) -> None:
+        """Test combining three tasks where only some are within threshold."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:00:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:00:30",
+            },
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:01:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:01:30",
+            },
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:03:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:03:30",
+            },
+        ]
+        result = combine_tasks_by_name(tasks, threshold_seconds=60)
+        # First two combine (30s gap), third doesn't (90s gap)
+        assert len(result) == 2
+        assert result[0]["start_time"] == "10:00:00"
+        assert result[0]["end_time"] == "10:01:30"
+        assert result[1]["start_time"] == "10:03:00"
+        assert result[1]["end_time"] == "10:03:30"
+
+    def test_combine_without_time_component(self) -> None:
+        """Test that tasks without time components are not combined."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "duration": "3d",
+            },
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-04",
+                "duration": "2d",
+            },
+        ]
+        result = combine_tasks_by_name(tasks)
+        # Tasks without end_date are not combinable
+        assert len(result) == 2
+
+    def test_combine_mixed_combinable_and_non_combinable(self) -> None:
+        """Test combining with mix of combinable and non-combinable tasks."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:00:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:00:30",
+            },
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "duration": "3d",
+            },
+        ]
+        result = combine_tasks_by_name(tasks)
+        # One combinable, one not - should return both separately
+        assert len(result) == 2
+
+    def test_combine_exact_threshold(self) -> None:
+        """Test combining tasks with gap exactly equal to threshold."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:00:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:00:30",
+            },
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:01:30",
+                "end_date": "2024-01-01",
+                "end_time": "10:02:00",
+            },
+        ]
+        result = combine_tasks_by_name(tasks, threshold_seconds=60)
+        # Gap is exactly 60 seconds, should combine (threshold is <=)
+        assert len(result) == 1
+
+    def test_combine_overlapping_tasks(self) -> None:
+        """Test combining overlapping tasks (second starts before first ends)."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:00:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:02:00",
+            },
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:01:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:03:00",
+            },
+        ]
+        result = combine_tasks_by_name(tasks, threshold_seconds=60)
+        # Overlapping (gap is negative), should combine and use max end time
+        assert len(result) == 1
+        assert result[0]["end_time"] == "10:03:00"
+
+    def test_combine_unsorted_tasks(self) -> None:
+        """Test that tasks are sorted before combining."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:01:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:01:30",
+            },
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:00:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:00:30",
+            },
+        ]
+        result = combine_tasks_by_name(tasks, threshold_seconds=60)
+        # Should be sorted and combined
+        assert len(result) == 1
+        assert result[0]["start_time"] == "10:00:00"
+        assert result[0]["end_time"] == "10:01:30"
+
+    def test_combine_date_only_format(self) -> None:
+        """Test combining tasks with date-only (no time) format."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "end_date": "2024-01-01",
+            },
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "end_date": "2024-01-01",
+            },
+        ]
+        result = combine_tasks_by_name(tasks, threshold_seconds=86400)
+        # Date-only tasks should combine (both on same day, no time => midnight)
+        assert len(result) == 1
+
+    def test_combine_with_invalid_timestamp(self) -> None:
+        """Test combining tasks where timestamp parsing fails."""
+        tasks = [
+            {
+                "task_name": "Task 1",
+                "start_date": "invalid-date",
+                "end_date": "invalid-date",
+            },
+            {
+                "task_name": "Task 1",
+                "start_date": "2024-01-01",
+                "start_time": "10:00:00",
+                "end_date": "2024-01-01",
+                "end_time": "10:01:00",
+            },
+        ]
+        result = combine_tasks_by_name(tasks)
+        # Task with invalid timestamp should be kept as non-combinable
+        assert len(result) == 2
 
 
 class TestFormatTaskId:
@@ -547,6 +851,49 @@ Task 1,2024-01-01,3d"""
         assert "gantt" in result
         assert "Task 1" in result
 
+    def test_convert_with_combine_threshold(self) -> None:
+        """Test converting CSV with task combining enabled."""
+        csv_content = """Name,start_timestamp,end_timestamp
+updTcpIpConnectState,2024-01-01 10:00:00,2024-01-01 10:00:30
+updTcpIpConnectState,2024-01-01 10:01:20,2024-01-01 10:02:00"""
+
+        result = convert_csv_to_mermaid(csv_content, combine_threshold=60)
+        assert "gantt" in result
+        assert "updTcpIpConnectState" in result
+        # Should be only one task line (combined)
+        lines = result.split("\n")
+        task_lines = [line for line in lines if "updTcpIpConnectState" in line]
+        assert len(task_lines) == 1
+        # Check that it spans the full time range
+        assert "10:00:00" in task_lines[0]
+        assert "10:02:00" in task_lines[0]
+
+    def test_convert_with_combine_threshold_disabled(self) -> None:
+        """Test converting CSV with task combining disabled."""
+        csv_content = """Name,start_timestamp,end_timestamp
+updTcpIpConnectState,2024-01-01 10:00:00,2024-01-01 10:00:30
+updTcpIpConnectState,2024-01-01 10:01:20,2024-01-01 10:02:00"""
+
+        result = convert_csv_to_mermaid(csv_content, combine_threshold=None)
+        assert "gantt" in result
+        assert "updTcpIpConnectState" in result
+        # Should be two separate task lines (not combined)
+        lines = result.split("\n")
+        task_lines = [line for line in lines if "updTcpIpConnectState" in line]
+        assert len(task_lines) == 2
+
+    def test_convert_with_combine_threshold_zero(self) -> None:
+        """Test that zero threshold means no combining (only exact overlaps)."""
+        csv_content = """Name,start_timestamp,end_timestamp
+Task1,2024-01-01 10:00:00,2024-01-01 10:00:30
+Task1,2024-01-01 10:00:30,2024-01-01 10:01:00"""
+
+        result = convert_csv_to_mermaid(csv_content, combine_threshold=0)
+        # Gap is 0 seconds (exact continuation), should combine
+        lines = result.split("\n")
+        task_lines = [line for line in lines if "Task1" in line]
+        assert len(task_lines) == 1
+
 
 class TestMain:
     """Tests for main CLI function."""
@@ -764,5 +1111,80 @@ Task 1,2024-01-01,3d"""
                         "Width must be an integer between 100 and 10000"
                         in stderr_output
                     )
+        finally:
+            os.unlink(temp_file)
+
+    def test_main_with_combine_threshold_flag(self) -> None:
+        """Test main function with combine threshold flag."""
+        csv_content = """Name,start_timestamp,end_timestamp
+Task1,2024-01-01 10:00:00,2024-01-01 10:00:30
+Task1,2024-01-01 10:01:20,2024-01-01 10:02:00"""
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f:
+            f.write(csv_content)
+            temp_file = f.name
+
+        try:
+            with patch("sys.argv", ["csv_to_mermaid_gantt", temp_file, "-c", "60"]):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    main()
+                    output = mock_stdout.getvalue()
+                    assert "gantt" in output
+                    assert "Task1" in output
+                    # Should be combined
+                    lines = output.split("\n")
+                    task_lines = [line for line in lines if "Task1" in line]
+                    assert len(task_lines) == 1
+        finally:
+            os.unlink(temp_file)
+
+    def test_main_with_combine_threshold_disabled(self) -> None:
+        """Test main function with combine threshold set to 0 (disabled)."""
+        csv_content = """Name,start_timestamp,end_timestamp
+Task1,2024-01-01 10:00:00,2024-01-01 10:00:30
+Task1,2024-01-01 10:01:20,2024-01-01 10:02:00"""
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f:
+            f.write(csv_content)
+            temp_file = f.name
+
+        try:
+            with patch(
+                "sys.argv",
+                ["csv_to_mermaid_gantt", temp_file, "--combine-threshold", "0"],
+            ):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    main()
+                    output = mock_stdout.getvalue()
+                    assert "gantt" in output
+                    assert "Task1" in output
+                    # Should not be combined (0 disables the feature)
+                    lines = output.split("\n")
+                    task_lines = [line for line in lines if "Task1" in line]
+                    assert len(task_lines) == 2
+        finally:
+            os.unlink(temp_file)
+
+    def test_main_with_default_combine_threshold(self) -> None:
+        """Test main function with default combine threshold (60 seconds)."""
+        csv_content = """Name,start_timestamp,end_timestamp
+Task1,2024-01-01 10:00:00,2024-01-01 10:00:30
+Task1,2024-01-01 10:01:20,2024-01-01 10:02:00"""
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f:
+            f.write(csv_content)
+            temp_file = f.name
+
+        try:
+            with patch("sys.argv", ["csv_to_mermaid_gantt", temp_file]):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    main()
+                    output = mock_stdout.getvalue()
+                    assert "gantt" in output
+                    assert "Task1" in output
+                    # Should be combined with default 60s threshold
+                    lines = output.split("\n")
+                    task_lines = [line for line in lines if "Task1" in line]
+                    assert len(task_lines) == 1
         finally:
             os.unlink(temp_file)

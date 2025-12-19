@@ -81,8 +81,34 @@ This will show:
 - Field normalization (e.g., `Name` → `task_name`)
 - Timestamp parsing details
 - Number of tasks processed
+- Task combining operations
 
 Useful for troubleshooting CSV format issues.
+
+### Combining tasks with equal names
+
+By default, tasks with the same name are combined if the gap between them is less than 60 seconds. This is useful for forensics timelines where the same activity may be split into multiple entries with small gaps.
+
+```bash
+# Use default 60-second threshold
+csv-to-mermaid-gantt input.csv
+
+# Use custom threshold (e.g., 120 seconds)
+csv-to-mermaid-gantt input.csv -c 120
+
+# Disable combining (keep all tasks separate)
+csv-to-mermaid-gantt input.csv -c 0
+```
+
+Example CSV with tasks that will be combined:
+
+```csv
+Name,start_timestamp,end_timestamp
+updTcpIpConnectState,2025-12-12 07:59:00,2025-12-12 08:00:21
+updTcpIpConnectState,2025-12-12 08:01:10,2025-12-12 08:02:30
+```
+
+With the default 60-second threshold, these two tasks (gap of 49 seconds) will be combined into a single continuous task from `07:59:00` to `08:02:30`.
 
 ### As a Python module
 
@@ -110,6 +136,19 @@ Network Event,1705315200,1705315260"""
 
 forensics_output = convert_csv_to_mermaid(forensics_csv, title="Forensics Timeline")
 print(forensics_output)
+
+# With task combining enabled (default: 60 seconds)
+combined_csv = """Name,start_timestamp,end_timestamp
+Process,2024-01-01 10:00:00,2024-01-01 10:00:30
+Process,2024-01-01 10:01:10,2024-01-01 10:02:00"""
+
+# Tasks will be combined (gap is 40 seconds < 60 seconds)
+combined_output = convert_csv_to_mermaid(combined_csv, combine_threshold=60)
+print(combined_output)
+
+# Disable combining
+separate_output = convert_csv_to_mermaid(combined_csv, combine_threshold=None)
+print(separate_output)
 ```
 
 ## CSV Format

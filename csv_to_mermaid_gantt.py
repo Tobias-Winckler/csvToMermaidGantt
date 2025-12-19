@@ -190,6 +190,125 @@ def format_task_id(task_name: str) -> str:
     return task_name.lower().replace(" ", "_").replace("-", "_")
 
 
+def combine_tasks_by_name(
+    tasks: List[Dict[str, str]],
+    threshold_seconds: int = 60,
+    verbose: bool = False,
+) -> List[Dict[str, str]]:
+    """Combine tasks with equal names if the gap between them is within threshold.
+
+    Args:
+        tasks: List of task dictionaries
+        threshold_seconds: Maximum gap in seconds between tasks to combine them
+        verbose: Whether to print verbose logging messages
+
+    Returns:
+        List of tasks with same-name tasks combined where appropriate
+    """
+    if not tasks:
+        return tasks
+
+    # Group tasks by name
+    tasks_by_name: Dict[str, List[Dict[str, str]]] = {}
+    for task in tasks:
+        name = task.get("task_name", "")
+        if name not in tasks_by_name:
+            tasks_by_name[name] = []
+        tasks_by_name[name].append(task)
+
+    combined_tasks = []
+
+    for task_name, task_list in tasks_by_name.items():
+        # If only one task with this name, no combining needed
+        if len(task_list) == 1:
+            combined_tasks.extend(task_list)
+            continue
+
+        # Sort tasks by start time for this name
+        # Only combine tasks that have both start and end timestamps
+        combinable_tasks = []
+        non_combinable_tasks = []
+
+        for task in task_list:
+            if (
+                "start_date" in task
+                and "end_date" in task
+                and task["start_date"]
+                and task["end_date"]
+            ):
+                # Parse datetime for sorting
+                start_str = task["start_date"]
+                if "start_time" in task and task.get("start_time"):
+                    start_str = f"{start_str} {task['start_time']}"
+                start_dt = parse_timestamp(start_str)
+
+                end_str = task["end_date"]
+                if "end_time" in task and task.get("end_time"):
+                    end_str = f"{end_str} {task['end_time']}"
+                end_dt = parse_timestamp(end_str)
+
+                if start_dt and end_dt:
+                    combinable_tasks.append((start_dt, end_dt, task))
+                else:
+                    non_combinable_tasks.append(task)
+            else:
+                non_combinable_tasks.append(task)
+
+        # Sort combinable tasks by start time
+        combinable_tasks.sort(key=lambda x: x[0])
+
+        # Combine tasks within threshold
+        if combinable_tasks:
+            merged = []
+            current_start, current_end, current_task = combinable_tasks[0]
+
+            for i in range(1, len(combinable_tasks)):
+                next_start, next_end, next_task = combinable_tasks[i]
+                gap = (next_start - current_end).total_seconds()
+
+                if gap <= threshold_seconds:
+                    # Combine: extend current_end to next_end
+                    log_verbose(
+                        f"Combining '{task_name}': "
+                        f"gap of {gap:.1f}s <= {threshold_seconds}s threshold",
+                        verbose,
+                    )
+                    current_end = max(current_end, next_end)
+                else:
+                    # Gap too large, save current combined task and start new sequence
+                    # Update the start and end date/time in the task dict
+                    updated_task = dict(current_task)
+                    updated_task["start_date"] = current_start.strftime("%Y-%m-%d")
+                    if "start_time" in current_task:
+                        updated_task["start_time"] = current_start.strftime("%H:%M:%S")
+                    updated_task["end_date"] = current_end.strftime("%Y-%m-%d")
+                    if "end_time" in current_task:
+                        updated_task["end_time"] = current_end.strftime("%H:%M:%S")
+                    merged.append(updated_task)
+
+                    # Start new sequence with next task
+                    current_start = next_start
+                    current_end = next_end
+                    current_task = next_task
+
+            # Add the last combined task
+            updated_task = dict(current_task)
+            updated_task["start_date"] = current_start.strftime("%Y-%m-%d")
+            if "start_time" in current_task:
+                updated_task["start_time"] = current_start.strftime("%H:%M:%S")
+            updated_task["end_date"] = current_end.strftime("%Y-%m-%d")
+            if "end_time" in current_task:
+                updated_task["end_time"] = current_end.strftime("%H:%M:%S")
+            merged.append(updated_task)
+
+            combined_tasks.extend(merged)
+
+        # Add non-combinable tasks as-is
+        combined_tasks.extend(non_combinable_tasks)
+
+    return combined_tasks
+
+
 def generate_mermaid_gantt(
     tasks: List[Dict[str, str]], title: str = "Gantt Chart", width: Optional[int] = None
 ) -> str:
@@ -278,6 +397,7 @@ def convert_csv_to_mermaid(
     title: str = "Gantt Chart",
     verbose: bool = False,
     width: Optional[int] = None,
+    combine_threshold: Optional[int] = 60,
 ) -> str:
     """Convert CSV content to Mermaid Gantt chart.
 
@@ -286,6 +406,8 @@ def convert_csv_to_mermaid(
         title: Title for the Gantt chart
         verbose: Whether to print verbose logging messages
         width: Optional width in pixels for the diagram (helps with narrow diagrams)
+        combine_threshold: Optional threshold in seconds for combining tasks with
+                          equal names (default: 60). Set to None to disable combining.
 
     Returns:
         Mermaid Gantt chart as a string
@@ -294,6 +416,14 @@ def convert_csv_to_mermaid(
         ValueError: If CSV format is invalid or task data is invalid
     """
     tasks = parse_csv(csv_content, verbose)
+
+    # Combine tasks with equal names if threshold is set
+    if combine_threshold is not None:
+        log_verbose(
+            f"Combining tasks with threshold of {combine_threshold} seconds", verbose
+        )
+        tasks = combine_tasks_by_name(tasks, combine_threshold, verbose)
+
     return generate_mermaid_gantt(tasks, title, width)
 
 
@@ -331,6 +461,16 @@ def main() -> None:
             "(helps with narrow diagrams when there are many tasks)"
         ),
     )
+    parser.add_argument(
+        "-c",
+        "--combine-threshold",
+        type=int,
+        default=60,
+        help=(
+            "Threshold in seconds for combining tasks with equal names "
+            "(default: 60). Set to 0 to disable combining."
+        ),
+    )
 
     args = parser.parse_args()
     verbose = args.verbose
@@ -353,8 +493,10 @@ def main() -> None:
 
         # Convert
         log_verbose("Starting CSV to Mermaid conversion", verbose)
+        # Set threshold to None if 0 is specified (to disable combining)
+        threshold = args.combine_threshold if args.combine_threshold > 0 else None
         mermaid_output = convert_csv_to_mermaid(
-            csv_content, args.title, verbose, args.width
+            csv_content, args.title, verbose, args.width, threshold
         )
         log_verbose("Conversion successful", verbose)
 
