@@ -406,8 +406,12 @@ class TestConvertLogToCsv:
 
     def test_parse_log_csv_with_windows_line_endings(self) -> None:
         """Test parsing log CSV with Windows line endings (CRLF)."""
-        log_content = "Date,Time,Action,Process,Protocol,LocalAddr,RemoteAddr\r\n18/12/2025,13.00.54,Added,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443\r\n"
-        
+        log_content = (
+            "Date,Time,Action,Process,Protocol,LocalAddr,RemoteAddr\r\n"
+            "18/12/2025,13.00.54,Added,processName.exe,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\r\n"
+        )
+
         result = parse_log_csv(log_content)
         assert len(result) == 1
         assert result[0]["Date"] == "18/12/2025"
@@ -415,9 +419,12 @@ class TestConvertLogToCsv:
 
     def test_parse_log_csv_with_header_whitespace(self) -> None:
         """Test parsing log CSV with whitespace in headers."""
-        log_content = """Date,Time,Action,Process,Protocol,LocalAddr ,RemoteAddr 
-18/12/2025,13.00.54,Added,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443"""
-        
+        log_content = (
+            "Date,Time,Action,Process,Protocol,LocalAddr ,RemoteAddr \n"
+            "18/12/2025,13.00.54,Added,processName.exe,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443"
+        )
+
         result = parse_log_csv(log_content)
         assert len(result) == 1
         # Headers should be normalized (whitespace stripped)
@@ -439,7 +446,7 @@ class TestConvertLogToCsv:
                 "RemoteAddr": "123.123.123.123:443",
             },
         ]
-        
+
         result = match_connection_events(log_entries)
         # Should return empty list when addresses are missing
         assert len(result) == 0
@@ -448,24 +455,24 @@ class TestConvertLogToCsv:
         """Test convert_log_to_csv with verbose logging enabled."""
         import io
         import sys
-        
+
         log_content = """Date,Time,Action,Process,Protocol,LocalAddr,RemoteAddr
 18/12/2025,13.00.54,Added,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
 18/12/2025,13.00.56,Removed,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443"""
-        
+
         # Capture stderr to check verbose output
         old_stderr = sys.stderr
         sys.stderr = io.StringIO()
-        
+
         try:
             result = convert_log_to_csv(log_content, verbose=True)
             stderr_output = sys.stderr.getvalue()
-            
+
             # Check that verbose logging occurred
             assert "[DEBUG]" in stderr_output
             assert "Parsed" in stderr_output
             assert "Matching connection events" in stderr_output
-            
+
             # Check that conversion still works
             lines = result.split("\n")
             assert len(lines) == 2  # Header + 1 connection

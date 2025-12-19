@@ -89,24 +89,34 @@ def parse_log_csv(csv_content: str, verbose: bool = False) -> List[Dict[str, str
     # Normalize field names by stripping whitespace
     if reader.fieldnames:
         original_fieldnames = list(reader.fieldnames)
-        reader.fieldnames = [name.strip() if name else name for name in reader.fieldnames]
+        reader.fieldnames = [
+            name.strip() if name else name for name in reader.fieldnames
+        ]
         log_verbose(f"Log CSV headers: {reader.fieldnames}", verbose)
         if original_fieldnames != list(reader.fieldnames):
-            log_verbose(f"Normalized headers (removed whitespace): {original_fieldnames} -> {reader.fieldnames}", verbose)
+            log_verbose(
+                f"Normalized headers (removed whitespace): "
+                f"{original_fieldnames} -> {reader.fieldnames}",
+                verbose,
+            )
 
     log_entries = []
     for row in reader:
         # Skip empty rows
         if any(value and value.strip() for value in row.values()):
             # Normalize keys in the row dictionary to match normalized fieldnames
-            normalized_row = {key.strip() if key else key: value for key, value in row.items()}
+            normalized_row = {
+                key.strip() if key else key: value for key, value in row.items()
+            }
             log_entries.append(normalized_row)
 
     log_verbose(f"Parsed {len(log_entries)} log entries from CSV", verbose)
     return log_entries
 
 
-def match_connection_events(log_entries: List[Dict[str, str]], verbose: bool = False) -> List[Dict[str, str]]:
+def match_connection_events(
+    log_entries: List[Dict[str, str]], verbose: bool = False
+) -> List[Dict[str, str]]:
     """Match Added and Removed events for connections.
 
     Each connection is identified by local_ip:local_port,remote_ip:remote_port.
@@ -133,8 +143,10 @@ def match_connection_events(log_entries: List[Dict[str, str]], verbose: bool = F
     Returns:
         List of matched connection dictionaries with start/end timestamps
     """
-    log_verbose(f"Matching connection events from {len(log_entries)} log entries", verbose)
-    
+    log_verbose(
+        f"Matching connection events from {len(log_entries)} log entries", verbose
+    )
+
     # Process events in order and detect connection boundaries
     result = []
     # Track active connections: conn_id -> {added_events, removed_events}
@@ -148,7 +160,11 @@ def match_connection_events(log_entries: List[Dict[str, str]], verbose: bool = F
         action = entry.get("Action", "").strip()
 
         if not local_addr or not remote_addr:
-            log_verbose(f"Skipping entry with missing address fields: LocalAddr='{local_addr}', RemoteAddr='{remote_addr}'", verbose)
+            log_verbose(
+                f"Skipping entry with missing address fields: "
+                f"LocalAddr='{local_addr}', RemoteAddr='{remote_addr}'",
+                verbose,
+            )
             continue
 
         # Initialize connection if not seen before
@@ -169,7 +185,10 @@ def match_connection_events(log_entries: List[Dict[str, str]], verbose: bool = F
             )
             if completed_conn:
                 result.append(completed_conn)
-                log_verbose(f"Completed connection (reuse detected): {completed_conn['Name']}", verbose)
+                log_verbose(
+                    f"Completed connection (reuse detected): {completed_conn['Name']}",
+                    verbose,
+                )
 
             # Start a new connection
             active_connections[conn_id] = {
@@ -182,7 +201,9 @@ def match_connection_events(log_entries: List[Dict[str, str]], verbose: bool = F
             conn["removed_events"].append(entry)
 
     # Process remaining active connections
-    log_verbose(f"Processing {len(active_connections)} remaining active connections", verbose)
+    log_verbose(
+        f"Processing {len(active_connections)} remaining active connections", verbose
+    )
     for conn_id, conn in active_connections.items():
         completed_conn = _create_connection_entry(
             conn_id, conn["added_events"], conn["removed_events"], verbose
