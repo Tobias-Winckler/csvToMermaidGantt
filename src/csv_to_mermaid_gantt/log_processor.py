@@ -16,8 +16,20 @@ Connections are matched based on: local_ip:local_port,remote_ip:remote_port
 """
 
 import csv
+import sys
 from datetime import datetime
 from typing import List, Dict, Optional
+
+
+def log_verbose(message: str, verbose: bool = False) -> None:
+    """Print verbose logging message if verbose mode is enabled.
+
+    Args:
+        message: Message to print
+        verbose: Whether to print the message
+    """
+    if verbose:
+        print(f"[DEBUG] {message}", file=sys.stderr)
 
 
 def parse_log_timestamp(date_str: str, time_str: str) -> Optional[datetime]:
@@ -54,11 +66,12 @@ def extract_connection_id(local_addr: str, remote_addr: str) -> str:
     return f"{local_addr.strip()},{remote_addr.strip()}"
 
 
-def parse_log_csv(csv_content: str) -> List[Dict[str, str]]:
+def parse_log_csv(csv_content: str, verbose: bool = False) -> List[Dict[str, str]]:
     """Parse log CSV content into list of log entries.
 
     Args:
         csv_content: CSV content with log entries
+        verbose: Whether to print verbose logging messages
 
     Returns:
         List of dictionaries containing log entry data
@@ -70,19 +83,30 @@ def parse_log_csv(csv_content: str) -> List[Dict[str, str]]:
     if not content:
         raise ValueError("CSV content is empty")
 
-    lines = content.split("\n")
+    lines = content.splitlines()
     reader = csv.DictReader(lines)
+
+    # Normalize field names by stripping whitespace
+    if reader.fieldnames:
+        original_fieldnames = list(reader.fieldnames)
+        reader.fieldnames = [name.strip() if name else name for name in reader.fieldnames]
+        log_verbose(f"Log CSV headers: {reader.fieldnames}", verbose)
+        if original_fieldnames != list(reader.fieldnames):
+            log_verbose(f"Normalized headers (removed whitespace): {original_fieldnames} -> {reader.fieldnames}", verbose)
 
     log_entries = []
     for row in reader:
         # Skip empty rows
         if any(value and value.strip() for value in row.values()):
-            log_entries.append(dict(row))
+            # Normalize keys in the row dictionary to match normalized fieldnames
+            normalized_row = {key.strip() if key else key: value for key, value in row.items()}
+            log_entries.append(normalized_row)
 
+    log_verbose(f"Parsed {len(log_entries)} log entries from CSV", verbose)
     return log_entries
 
 
-def match_connection_events(log_entries: List[Dict[str, str]]) -> List[Dict[str, str]]:
+def match_connection_events(log_entries: List[Dict[str, str]], verbose: bool = False) -> List[Dict[str, str]]:
     """Match Added and Removed events for connections.
 
     Each connection is identified by local_ip:local_port,remote_ip:remote_port.
@@ -104,10 +128,13 @@ def match_connection_events(log_entries: List[Dict[str, str]]) -> List[Dict[str,
 
     Args:
         log_entries: List of log entry dictionaries
+        verbose: Whether to print verbose logging messages
 
     Returns:
         List of matched connection dictionaries with start/end timestamps
     """
+    log_verbose(f"Matching connection events from {len(log_entries)} log entries", verbose)
+    
     # Process events in order and detect connection boundaries
     result = []
     # Track active connections: conn_id -> {added_events, removed_events}
@@ -119,6 +146,10 @@ def match_connection_events(log_entries: List[Dict[str, str]]) -> List[Dict[str,
         remote_addr = entry.get("RemoteAddr", "")
         conn_id = extract_connection_id(local_addr, remote_addr)
         action = entry.get("Action", "").strip()
+
+        if not local_addr or not remote_addr:
+            log_verbose(f"Skipping entry with missing address fields: LocalAddr='{local_addr}', RemoteAddr='{remote_addr}'", verbose)
+            continue
 
         # Initialize connection if not seen before
         if conn_id not in active_connections:
@@ -134,10 +165,11 @@ def match_connection_events(log_entries: List[Dict[str, str]]) -> List[Dict[str,
         if action == "Added" and conn["removed_events"]:
             # Complete the previous connection
             completed_conn = _create_connection_entry(
-                conn_id, conn["added_events"], conn["removed_events"]
+                conn_id, conn["added_events"], conn["removed_events"], verbose
             )
             if completed_conn:
                 result.append(completed_conn)
+                log_verbose(f"Completed connection (reuse detected): {completed_conn['Name']}", verbose)
 
             # Start a new connection
             active_connections[conn_id] = {
@@ -150,13 +182,16 @@ def match_connection_events(log_entries: List[Dict[str, str]]) -> List[Dict[str,
             conn["removed_events"].append(entry)
 
     # Process remaining active connections
+    log_verbose(f"Processing {len(active_connections)} remaining active connections", verbose)
     for conn_id, conn in active_connections.items():
         completed_conn = _create_connection_entry(
-            conn_id, conn["added_events"], conn["removed_events"]
+            conn_id, conn["added_events"], conn["removed_events"], verbose
         )
         if completed_conn:
             result.append(completed_conn)
+            log_verbose(f"Completed connection: {completed_conn['Name']}", verbose)
 
+    log_verbose(f"Matched {len(result)} total connections", verbose)
     return result
 
 
@@ -164,6 +199,7 @@ def _create_connection_entry(
     conn_id: str,
     added_events: List[Dict[str, str]],
     removed_events: List[Dict[str, str]],
+    verbose: bool = False,
 ) -> Optional[Dict[str, str]]:
     """Create a connection entry from Added and Removed events.
 
@@ -171,6 +207,7 @@ def _create_connection_entry(
         conn_id: Connection identifier
         added_events: List of Added events for this connection
         removed_events: List of Removed events for this connection
+        verbose: Whether to print verbose logging messages
 
     Returns:
         Dictionary with Name, start_timestamp, end_timestamp or None if no
@@ -258,12 +295,13 @@ def _create_connection_entry(
     }
 
 
-def convert_log_to_csv(log_content: str) -> str:
+def convert_log_to_csv(log_content: str, verbose: bool = False) -> str:
     """Convert log format to standard CSV format for diagram visualization.
 
     Args:
         log_content: Log CSV content with Date,Time,Action,Process,Protocol,
                      LocalAddr,RemoteAddr
+        verbose: Whether to print verbose logging messages
 
     Returns:
         Standard CSV format with Name,start_timestamp,end_timestamp
@@ -271,8 +309,8 @@ def convert_log_to_csv(log_content: str) -> str:
     Raises:
         ValueError: If log format is invalid
     """
-    log_entries = parse_log_csv(log_content)
-    matched_connections = match_connection_events(log_entries)
+    log_entries = parse_log_csv(log_content, verbose)
+    matched_connections = match_connection_events(log_entries, verbose)
 
     # Convert to CSV format
     lines = ["Name,start_timestamp,end_timestamp"]

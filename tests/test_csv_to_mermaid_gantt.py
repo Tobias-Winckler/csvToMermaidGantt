@@ -85,6 +85,15 @@ Task 2,2024-01-04,2d"""
         assert result[0]["task_name"] == "Task 1"
         assert result[1]["task_name"] == "Task 2"
 
+    def test_parse_csv_with_windows_line_endings(self) -> None:
+        """Test parsing CSV with Windows line endings (CRLF)."""
+        csv_content = "task_name,start_date,duration\r\nTask 1,2024-01-01,3d\r\nTask 2,2024-01-04,2d\r\n"
+        
+        result = parse_csv(csv_content)
+        assert len(result) == 2
+        assert result[0]["task_name"] == "Task 1"
+        assert result[1]["task_name"] == "Task 2"
+
 
 class TestParseTimestamp:
     """Tests for parse_timestamp function."""

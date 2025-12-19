@@ -403,3 +403,71 @@ class TestConvertLogToCsv:
         result = convert_log_to_csv(log_content)
         lines = result.split("\n")
         assert len(lines) == 3  # Header + 2 connections
+
+    def test_parse_log_csv_with_windows_line_endings(self) -> None:
+        """Test parsing log CSV with Windows line endings (CRLF)."""
+        log_content = "Date,Time,Action,Process,Protocol,LocalAddr,RemoteAddr\r\n18/12/2025,13.00.54,Added,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443\r\n"
+        
+        result = parse_log_csv(log_content)
+        assert len(result) == 1
+        assert result[0]["Date"] == "18/12/2025"
+        assert result[0]["Action"] == "Added"
+
+    def test_parse_log_csv_with_header_whitespace(self) -> None:
+        """Test parsing log CSV with whitespace in headers."""
+        log_content = """Date,Time,Action,Process,Protocol,LocalAddr ,RemoteAddr 
+18/12/2025,13.00.54,Added,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443"""
+        
+        result = parse_log_csv(log_content)
+        assert len(result) == 1
+        # Headers should be normalized (whitespace stripped)
+        assert "LocalAddr" in result[0]
+        assert "RemoteAddr" in result[0]
+        assert result[0]["LocalAddr"] == "10.10.0.1:58100"
+        assert result[0]["RemoteAddr"] == "123.123.123.123:443"
+
+    def test_match_connection_events_with_missing_addresses(self) -> None:
+        """Test matching connection events when addresses are missing."""
+        log_entries = [
+            {
+                "Date": "18/12/2025",
+                "Time": "13.00.54",
+                "Action": "Added",
+                "Process": "processName.exe",
+                "Protocol": "TCP",
+                "LocalAddr": "",  # Missing
+                "RemoteAddr": "123.123.123.123:443",
+            },
+        ]
+        
+        result = match_connection_events(log_entries)
+        # Should return empty list when addresses are missing
+        assert len(result) == 0
+
+    def test_convert_log_to_csv_verbose(self) -> None:
+        """Test convert_log_to_csv with verbose logging enabled."""
+        import io
+        import sys
+        
+        log_content = """Date,Time,Action,Process,Protocol,LocalAddr,RemoteAddr
+18/12/2025,13.00.54,Added,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
+18/12/2025,13.00.56,Removed,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443"""
+        
+        # Capture stderr to check verbose output
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        
+        try:
+            result = convert_log_to_csv(log_content, verbose=True)
+            stderr_output = sys.stderr.getvalue()
+            
+            # Check that verbose logging occurred
+            assert "[DEBUG]" in stderr_output
+            assert "Parsed" in stderr_output
+            assert "Matching connection events" in stderr_output
+            
+            # Check that conversion still works
+            lines = result.split("\n")
+            assert len(lines) == 2  # Header + 1 connection
+        finally:
+            sys.stderr = old_stderr

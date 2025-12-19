@@ -134,7 +134,7 @@ def parse_csv(csv_content: str, verbose: bool = False) -> List[Dict[str, str]]:
     if not content:
         raise ValueError("CSV content is empty")
 
-    lines = content.split("\n")
+    lines = content.splitlines()
     reader = csv.DictReader(lines)
     tasks = []
 
@@ -536,7 +536,7 @@ def main() -> None:
                     # Convert log format if specified
                     if args.log_format:
                         log_verbose("Converting log format to standard CSV", verbose)
-                        csv_content = convert_log_to_csv(csv_content)
+                        csv_content = convert_log_to_csv(csv_content, verbose)
 
                     csv_files.append({"name": input_path, "content": csv_content})
             else:
@@ -546,7 +546,7 @@ def main() -> None:
                 # Convert log format if specified
                 if args.log_format:
                     log_verbose("Converting log format to standard CSV", verbose)
-                    csv_content = convert_log_to_csv(csv_content)
+                    csv_content = convert_log_to_csv(csv_content, verbose)
 
                 csv_files.append({"name": "stdin", "content": csv_content})
 
@@ -592,7 +592,7 @@ def main() -> None:
         # Convert log format if specified
         if args.log_format:
             log_verbose("Converting log format to standard CSV", verbose)
-            csv_content = convert_log_to_csv(csv_content)
+            csv_content = convert_log_to_csv(csv_content, verbose)
 
         log_verbose(
             f"Input CSV content: {len(csv_content)} bytes, "
