@@ -26,6 +26,16 @@ For development:
 pip install -e ".[dev]"
 ```
 
+### Updating After Changes
+
+When you pull new changes from the repository, the editable installation will automatically reflect the changes in the code. However, if you make changes to `pyproject.toml` (such as adding dependencies or changing entry points), you should reinstall:
+
+```bash
+pip install -e .
+```
+
+This ensures that any configuration changes are properly applied.
+
 ## Usage
 
 ### Basic usage with file input
