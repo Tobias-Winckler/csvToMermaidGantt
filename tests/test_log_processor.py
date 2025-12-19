@@ -497,3 +497,20 @@ class TestConvertLogToCsv:
             assert "2025-12-18 13:00:56" in connection_line
         finally:
             sys.stderr = old_stderr
+
+    def test_parse_log_csv_misaligned_columns(self) -> None:
+        """Test parsing log CSV with misaligned column counts."""
+        # Header has 6 columns but data rows have 7 columns
+        log_content = (
+            "Time,Action,Process,Protocol,LocalAddr,RemoteAddr\n"
+            "18/12/2025,13.00.54,Added,processName.exe,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\n"
+            "18/12/2025,13.00.56,Removed,processName.exe,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443"
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="CSV structure error.*Header row has 6 columns.*row.*has 7 columns",
+        ):
+            parse_log_csv(log_content)
