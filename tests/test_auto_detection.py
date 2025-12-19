@@ -114,10 +114,16 @@ class TestAutoDetectionWithMissingHeaders:
     def test_parse_log_without_headers(self) -> None:
         """Test parsing log CSV without header row."""
         # Data without headers
-        csv_content = """18/12/2025,13.00.54,Added,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
-18/12/2025,13.00.56,Added,Unknown,TCP,10.10.0.1:58100,123.123.123.123:443
-18/12/2025,13.00.56,Removed,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
-18/12/2025,13.02.55,Removed,Unknown,TCP,10.10.0.1:58100,123.123.123.123:443"""
+        csv_content = (
+            "18/12/2025,13.00.54,Added,processName.exe,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\n"
+            "18/12/2025,13.00.56,Added,Unknown,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\n"
+            "18/12/2025,13.00.56,Removed,processName.exe,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\n"
+            "18/12/2025,13.02.55,Removed,Unknown,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443"
+        )
 
         result = parse_log_csv(csv_content)
         assert len(result) == 4
@@ -155,25 +161,39 @@ TCP,Unknown,Removed,13.02.55,123.123.123.123:443,10.10.0.1:58100,18/12/2025"""
 
     def test_convert_log_missing_date_to_csv(self) -> None:
         """Test converting log with missing Date column to CSV format."""
-        log_content = """Time,Action,Process,Protocol,LocalAddr,RemoteAddr
-13.00.54,Added,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
-13.00.56,Added,Unknown,TCP,10.10.0.1:58100,123.123.123.123:443
-13.00.56,Removed,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
-13.02.55,Removed,Unknown,TCP,10.10.0.1:58100,123.123.123.123:443"""
+        log_content = (
+            "Time,Action,Process,Protocol,LocalAddr,RemoteAddr\n"
+            "13.00.54,Added,processName.exe,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\n"
+            "13.00.56,Added,Unknown,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\n"
+            "13.00.56,Removed,processName.exe,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\n"
+            "13.02.55,Removed,Unknown,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443"
+        )
 
         result = convert_log_to_csv(log_content)
         lines = result.split("\n")
         assert lines[0] == "Name,start_timestamp,end_timestamp"
-        assert len(lines) == 2  # Header + 1 connection
+        # Header + 1 connection
+        assert len(lines) == 2
         assert "processName.exe" in lines[1]
 
     def test_parse_log_without_headers_different_order(self) -> None:
-        """Test parsing log without headers with data in different column order."""
-        # Without headers: Protocol, Action, LocalAddr, RemoteAddr, Time, Process
-        csv_content = """TCP,Added,10.10.0.1:58100,123.123.123.123:443,13.00.54,processName.exe
-TCP,Added,10.10.0.1:58100,123.123.123.123:443,13.00.56,Unknown
-TCP,Removed,10.10.0.1:58100,123.123.123.123:443,13.00.56,processName.exe
-TCP,Removed,10.10.0.1:58100,123.123.123.123:443,13.02.55,Unknown"""
+        """Test parsing without headers with different column order."""
+        # Without headers: Protocol, Action, LocalAddr, RemoteAddr,
+        # Time, Process
+        csv_content = (
+            "TCP,Added,10.10.0.1:58100,123.123.123.123:443,"
+            "13.00.54,processName.exe\n"
+            "TCP,Added,10.10.0.1:58100,123.123.123.123:443,"
+            "13.00.56,Unknown\n"
+            "TCP,Removed,10.10.0.1:58100,123.123.123.123:443,"
+            "13.00.56,processName.exe\n"
+            "TCP,Removed,10.10.0.1:58100,123.123.123.123:443,"
+            "13.02.55,Unknown"
+        )
 
         result = parse_log_csv(csv_content)
         assert len(result) == 4
@@ -261,10 +281,10 @@ class TestEndToEnd:
 
         result = convert_log_to_csv(log_content)
         lines = result.splitlines()
-        
+
         # Check header
         assert lines[0] == "Name,start_timestamp,end_timestamp"
-        
+
         # Check we got a connection
         assert len(lines) == 2
         assert "browser.exe" in lines[1]
@@ -272,28 +292,40 @@ class TestEndToEnd:
 
     def test_full_workflow_columns_different_order(self) -> None:
         """Test complete workflow with columns in different order."""
-        log_content = """Process,Protocol,Action,RemoteAddr,LocalAddr,Time,Date
-server.exe,TCP,Added,192.168.1.100:80,10.0.0.1:54321,10.30.00,20/12/2025
-Unknown,TCP,Added,192.168.1.100:80,10.0.0.1:54321,10.30.01,20/12/2025
-server.exe,TCP,Removed,192.168.1.100:80,10.0.0.1:54321,10.35.00,20/12/2025
-Unknown,TCP,Removed,192.168.1.100:80,10.0.0.1:54321,10.35.01,20/12/2025"""
+        log_content = (
+            "Process,Protocol,Action,RemoteAddr,LocalAddr,Time,Date\n"
+            "server.exe,TCP,Added,192.168.1.100:80,"
+            "10.0.0.1:54321,10.30.00,20/12/2025\n"
+            "Unknown,TCP,Added,192.168.1.100:80,"
+            "10.0.0.1:54321,10.30.01,20/12/2025\n"
+            "server.exe,TCP,Removed,192.168.1.100:80,"
+            "10.0.0.1:54321,10.35.00,20/12/2025\n"
+            "Unknown,TCP,Removed,192.168.1.100:80,"
+            "10.0.0.1:54321,10.35.01,20/12/2025"
+        )
 
         result = convert_log_to_csv(log_content)
         lines = result.splitlines()
-        
+
         assert len(lines) == 2
         assert "server.exe" in lines[1]
 
     def test_full_workflow_no_headers(self) -> None:
         """Test complete workflow without any headers."""
         # Data in standard order but no header
-        log_content = """18/12/2025,13.00.54,Added,myapp.exe,TCP,10.10.0.1:58100,123.123.123.123:443
-18/12/2025,13.00.56,Added,Unknown,TCP,10.10.0.1:58100,123.123.123.123:443
-18/12/2025,13.02.56,Removed,myapp.exe,TCP,10.10.0.1:58100,123.123.123.123:443
-18/12/2025,13.02.58,Removed,Unknown,TCP,10.10.0.1:58100,123.123.123.123:443"""
+        log_content = (
+            "18/12/2025,13.00.54,Added,myapp.exe,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\n"
+            "18/12/2025,13.00.56,Added,Unknown,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\n"
+            "18/12/2025,13.02.56,Removed,myapp.exe,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\n"
+            "18/12/2025,13.02.58,Removed,Unknown,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443"
+        )
 
         result = convert_log_to_csv(log_content)
         lines = result.splitlines()
-        
+
         assert len(lines) == 2
         assert "myapp.exe" in lines[1]

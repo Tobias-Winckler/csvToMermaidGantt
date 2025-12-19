@@ -19,7 +19,7 @@ import csv
 import re
 import sys
 from datetime import datetime
-from typing import List, Dict, Optional, Set, Tuple
+from typing import List, Dict, Optional, Set
 
 
 def log_verbose(message: str, verbose: bool = False) -> None:
@@ -141,7 +141,7 @@ def _is_process_value(value: str) -> bool:
     if not value or not value.strip():
         return False
     val = value.strip()
-    
+
     # Exclude known non-process values
     if _is_protocol_value(val):
         return False
@@ -153,18 +153,16 @@ def _is_process_value(value: str) -> bool:
         return False
     if _is_time_value(val):
         return False
-    
+
     # Match *.exe, System, Unknown, or similar process names
     return (
         val.endswith(".exe")
         or val.lower() in ["system", "unknown"]
-        or (len(val) > 0 and not ":" in val and not "," in val)
+        or (len(val) > 0 and ":" not in val and "," not in val)
     )
 
 
-def _detect_column_type(
-    values: List[str], verbose: bool = False
-) -> Optional[str]:
+def _detect_column_type(values: List[str], verbose: bool = False) -> Optional[str]:
     """Detect column type based on its values.
 
     Detection order (from most to least specific):
@@ -305,9 +303,7 @@ def _auto_detect_headers(
             verbose,
         )
     elif len(address_indices) == 1:
-        log_verbose(
-            "Warning: Only found one address column, expected two", verbose
-        )
+        log_verbose("Warning: Only found one address column, expected two", verbose)
 
     # Check for required columns
     required = ["Action", "Protocol", "LocalAddr", "RemoteAddr"]
@@ -383,9 +379,7 @@ def parse_log_timestamp(
         except ValueError:
             # Try with microseconds
             try:
-                return datetime.strptime(
-                    datetime_str, f"{date_format} %H:%M:%S.%f"
-                )
+                return datetime.strptime(datetime_str, f"{date_format} %H:%M:%S.%f")
             except ValueError:
                 continue
 
@@ -436,7 +430,7 @@ def parse_log_csv(csv_content: str, verbose: bool = False) -> List[Dict[str, str
         raise ValueError("CSV content is empty")
 
     lines = content.splitlines()
-    
+
     # Try to parse with csv.reader first to get all rows
     reader_list = list(csv.reader(lines))
     if not reader_list:
@@ -449,13 +443,18 @@ def parse_log_csv(csv_content: str, verbose: bool = False) -> List[Dict[str, str
     # Check if first row looks like headers
     has_headers = False
     headers = None
-    
+
     # Common header names we expect
     expected_headers = {
-        "Date", "Time", "Action", "Process", "Protocol", 
-        "LocalAddr", "RemoteAddr"
+        "Date",
+        "Time",
+        "Action",
+        "Process",
+        "Protocol",
+        "LocalAddr",
+        "RemoteAddr",
     }
-    
+
     # If any value in first row matches expected headers, treat it as headers
     if any(val.strip() in expected_headers for val in first_row if val):
         has_headers = True
@@ -486,14 +485,14 @@ def parse_log_csv(csv_content: str, verbose: bool = False) -> List[Dict[str, str
             if has_headers and headers:
                 log_verbose(
                     f"Auto-detection failed: {e}. Trying to use provided headers.",
-                    verbose
+                    verbose,
                 )
                 # Build a simple mapping from header names
                 column_mapping = {}
                 for idx, header in enumerate(headers):
                     if header and header in expected_headers:
                         column_mapping[header] = idx
-                
+
                 # Check if we have required columns
                 required = ["Action", "Protocol", "LocalAddr", "RemoteAddr"]
                 missing = [col for col in required if col not in column_mapping]
@@ -507,35 +506,32 @@ def parse_log_csv(csv_content: str, verbose: bool = False) -> List[Dict[str, str
 
     # Parse log entries
     log_entries = []
-    
+
     if standard_headers:
         # Use DictReader with standard headers
         reader = csv.DictReader(lines)
         if reader.fieldnames:
             reader.fieldnames = [
-                name.strip() if name is not None else name 
-                for name in reader.fieldnames
+                name.strip() if name is not None else name for name in reader.fieldnames
             ]
             log_verbose(f"Log CSV headers: {reader.fieldnames}", verbose)
-        
+
         for row in reader:
             # Skip empty rows
             if any(value and value.strip() for value in row.values()):
                 normalized_row = {
-                    key.strip(): value 
-                    for key, value in row.items() 
-                    if key is not None
+                    key.strip(): value for key, value in row.items() if key is not None
                 }
                 log_entries.append(normalized_row)
     else:
         # Use column mapping
         assert column_mapping is not None
         log_verbose(f"Using column mapping: {column_mapping}", verbose)
-        
+
         for row_data in data_rows:
             if not any(value and value.strip() for value in row_data):
                 continue  # Skip empty rows
-            
+
             # Build standardized row
             entry = {}
             for std_name, col_idx in column_mapping.items():
@@ -543,7 +539,7 @@ def parse_log_csv(csv_content: str, verbose: bool = False) -> List[Dict[str, str
                     entry[std_name] = row_data[col_idx]
                 else:
                     entry[std_name] = ""
-            
+
             log_entries.append(entry)
 
     log_verbose(f"Parsed {len(log_entries)} log entries from CSV", verbose)
