@@ -1,10 +1,17 @@
 # csvToMermaidGantt
 
-A Python CLI tool that converts CSV files to Mermaid Gantt charts, with support for digital forensics timelines.
+A Python CLI tool that converts CSV files to Mermaid Gantt charts or interactive HTML visualizations, with support for digital forensics timelines.
 
 ## Features
 
 - Convert CSV files to Mermaid Gantt chart syntax
+- **NEW: Generate interactive HTML with time-synced visualizations**
+  - Timeline Charts (Gantt-like bar view)
+  - Histograms showing event counts over time
+  - Line Graphs for value trends
+  - Horizontal zoom synchronization across all charts
+  - Individual filtering by file and task name
+  - Support for multiple CSV files in combined view
 - Support for digital forensics format with timestamps (seconds to years)
 - Support for legacy project management format with dates and durations
 - Timestamp parsing (ISO 8601, Unix timestamps)
@@ -77,6 +84,45 @@ This adds Mermaid configuration to set the diagram width, making it easier to re
 ```bash
 cat input.csv | csv-to-mermaid-gantt > output.md
 ```
+
+### Interactive HTML Visualizations (NEW)
+
+Generate interactive HTML with time-synchronized charts for digital forensics analysis:
+
+```bash
+# Single file with all charts
+csv-to-mermaid-gantt input.csv --html -o output.html
+
+# Multiple files for combined analysis
+csv-to-mermaid-gantt file1.csv file2.csv file3.csv --html \
+  -t "Combined Forensics Timeline" -o timeline.html
+
+# Selective charts
+csv-to-mermaid-gantt input.csv --html --no-histogram -o output.html
+```
+
+Features of HTML output:
+- **Timeline Chart (Gantt View)**: Visualize events on a horizontal timeline
+- **Histogram**: See event frequency over time bins
+- **Line Graph**: Track numeric values over time (e.g., duration, counts)
+- **Synchronized Zoom**: Zooming in one chart updates all others
+- **Filtering**: Filter by CSV file source or task name
+- **Interactive**: Hover for details, pan, zoom, and reset views
+
+Example with custom options:
+
+```bash
+# Generate HTML with custom title and selective charts
+csv-to-mermaid-gantt forensics.csv --html \
+  -t "Security Incident Timeline" \
+  --no-line-graph \
+  -o incident.html
+```
+
+Chart selection options:
+- `--no-timeline`: Disable timeline chart
+- `--no-histogram`: Disable histogram
+- `--no-line-graph`: Disable line graph
 
 ### Verbose mode for debugging
 
@@ -159,6 +205,47 @@ print(combined_output)
 # Disable combining
 separate_output = convert_csv_to_mermaid(combined_csv, combine_threshold=None)
 print(separate_output)
+```
+
+#### Generating HTML Visualizations from Python
+
+```python
+from csv_to_mermaid_gantt.html_visualizations import convert_csv_files_to_html
+
+# Single CSV file
+csv_files = [
+    {
+        "name": "forensics_log.csv",
+        "content": """Name,start_timestamp,end_timestamp
+File Access,2024-01-15T09:23:11,2024-01-15T09:23:45
+Network Event,2024-01-15T09:25:45,2024-01-15T09:26:12"""
+    }
+]
+
+html_output = convert_csv_files_to_html(
+    csv_files,
+    title="Forensics Analysis",
+    show_timeline=True,
+    show_histogram=True,
+    show_line_graph=True
+)
+
+# Save to file
+with open("output.html", "w") as f:
+    f.write(html_output)
+
+# Multiple CSV files for combined analysis
+csv_files = [
+    {"name": "System Events", "content": system_csv},
+    {"name": "Network Logs", "content": network_csv},
+    {"name": "File Access", "content": file_csv}
+]
+
+combined_html = convert_csv_files_to_html(
+    csv_files,
+    title="Multi-Source Timeline Analysis",
+    combine_threshold=60  # Combine tasks within 60 seconds
+)
 ```
 
 ## CSV Format
