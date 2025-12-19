@@ -430,12 +430,18 @@ def convert_csv_to_mermaid(
 def main() -> None:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Convert CSV files to Mermaid Gantt charts"
+        description=(
+            "Convert CSV files to Mermaid Gantt charts or "
+            "interactive HTML visualizations"
+        )
     )
     parser.add_argument(
         "input_file",
-        nargs="?",
-        help="Input CSV file (if not provided, reads from stdin)",
+        nargs="*",
+        help=(
+            "Input CSV file(s) (if not provided, reads from stdin). "
+            "Multiple files can be specified for HTML output."
+        ),
     )
     parser.add_argument(
         "-o", "--output", help="Output file (if not provided, writes to stdout)"
@@ -444,7 +450,7 @@ def main() -> None:
         "-t",
         "--title",
         default="Gantt Chart",
-        help='Title for the Gantt chart (default: "Gantt Chart")',
+        help='Title for the chart (default: "Gantt Chart")',
     )
     parser.add_argument(
         "-v",
@@ -471,15 +477,87 @@ def main() -> None:
             "(default: 60). Set to 0 to disable combining."
         ),
     )
+    parser.add_argument(
+        "--html",
+        action="store_true",
+        help=(
+            "Generate interactive HTML with time-synced visualizations "
+            "instead of Mermaid format"
+        ),
+    )
+    parser.add_argument(
+        "--no-timeline",
+        action="store_true",
+        help="Disable timeline chart in HTML output",
+    )
+    parser.add_argument(
+        "--no-histogram",
+        action="store_true",
+        help="Disable histogram in HTML output",
+    )
+    parser.add_argument(
+        "--no-line-graph",
+        action="store_true",
+        help="Disable line graph in HTML output",
+    )
 
     args = parser.parse_args()
     verbose = args.verbose
 
     try:
+        # Handle HTML output mode
+        if args.html:
+            from .html_visualizations import convert_csv_files_to_html
+
+            csv_files = []
+
+            # Read input files
+            if args.input_file:
+                log_verbose(f"Reading {len(args.input_file)} input file(s)", verbose)
+                for input_path in args.input_file:
+                    log_verbose(f"Reading input from file: {input_path}", verbose)
+                    with open(input_path, "r", encoding="utf-8-sig") as f:
+                        csv_content = f.read()
+                    csv_files.append({"name": input_path, "content": csv_content})
+            else:
+                log_verbose("Reading input from stdin", verbose)
+                csv_content = sys.stdin.read()
+                csv_files.append({"name": "stdin", "content": csv_content})
+
+            # Set threshold to None if 0 is specified (to disable combining)
+            threshold = args.combine_threshold if args.combine_threshold > 0 else None
+
+            # Generate HTML
+            log_verbose("Generating HTML visualization", verbose)
+            html_output = convert_csv_files_to_html(
+                csv_files,
+                title=args.title,
+                show_timeline=not args.no_timeline,
+                show_histogram=not args.no_histogram,
+                show_line_graph=not args.no_line_graph,
+                verbose=verbose,
+                combine_threshold=threshold,
+            )
+            log_verbose("HTML generation successful", verbose)
+
+            # Write output
+            if args.output:
+                log_verbose(f"Writing output to file: {args.output}", verbose)
+                with open(args.output, "w", encoding="utf-8") as f:
+                    f.write(html_output)
+            else:
+                print(html_output)
+
+            return
+
+        # Original Mermaid output mode
         # Read input
         if args.input_file:
-            log_verbose(f"Reading input from file: {args.input_file}", verbose)
-            with open(args.input_file, "r", encoding="utf-8-sig") as f:
+            # For backward compatibility, take only the first file for Mermaid output
+            # args.input_file is always a list due to nargs="*"
+            input_path = args.input_file[0]
+            log_verbose(f"Reading input from file: {input_path}", verbose)
+            with open(input_path, "r", encoding="utf-8-sig") as f:
                 csv_content = f.read()
         else:
             log_verbose("Reading input from stdin", verbose)

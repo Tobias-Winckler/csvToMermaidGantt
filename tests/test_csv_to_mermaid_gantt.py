@@ -1188,3 +1188,144 @@ Task1,2024-01-01 10:01:20,2024-01-01 10:02:00"""
                     assert len(task_lines) == 1
         finally:
             os.unlink(temp_file)
+
+    def test_main_html_output_single_file(self) -> None:
+        """Test main function with HTML output mode for single file."""
+        csv_content = """Name,start_timestamp,end_timestamp
+Task1,2024-01-01T10:00:00,2024-01-01T11:00:00
+Task2,2024-01-01T12:00:00,2024-01-01T13:00:00"""
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f:
+            f.write(csv_content)
+            temp_file = f.name
+
+        try:
+            with patch("sys.argv", ["csv_to_mermaid_gantt", temp_file, "--html"]):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    main()
+                    output = mock_stdout.getvalue()
+                    assert "<!DOCTYPE html>" in output
+                    assert "Plotly" in output
+                    assert "Timeline Chart" in output
+                    assert "Event Histogram" in output
+                    assert "Line Graph" in output
+        finally:
+            os.unlink(temp_file)
+
+    def test_main_html_output_multiple_files(self) -> None:
+        """Test main function with HTML output mode for multiple files."""
+        csv_content1 = """Name,start_timestamp,end_timestamp
+Task1,2024-01-01T10:00:00,2024-01-01T11:00:00"""
+
+        csv_content2 = """Name,start_timestamp,end_timestamp
+Task2,2024-01-01T12:00:00,2024-01-01T13:00:00"""
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f1:
+            f1.write(csv_content1)
+            temp_file1 = f1.name
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f2:
+            f2.write(csv_content2)
+            temp_file2 = f2.name
+
+        try:
+            with patch(
+                "sys.argv",
+                ["csv_to_mermaid_gantt", temp_file1, temp_file2, "--html"],
+            ):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    main()
+                    output = mock_stdout.getvalue()
+                    assert "<!DOCTYPE html>" in output
+                    assert temp_file1 in output
+                    assert temp_file2 in output
+        finally:
+            os.unlink(temp_file1)
+            os.unlink(temp_file2)
+
+    def test_main_html_output_with_title(self) -> None:
+        """Test main function with HTML output and custom title."""
+        csv_content = """Name,start_timestamp,end_timestamp
+Task1,2024-01-01T10:00:00,2024-01-01T11:00:00"""
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f:
+            f.write(csv_content)
+            temp_file = f.name
+
+        try:
+            with patch(
+                "sys.argv",
+                ["csv_to_mermaid_gantt", temp_file, "--html", "-t", "Custom Title"],
+            ):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    main()
+                    output = mock_stdout.getvalue()
+                    assert "Custom Title" in output
+        finally:
+            os.unlink(temp_file)
+
+    def test_main_html_output_selective_charts(self) -> None:
+        """Test main function with HTML output and selective charts."""
+        csv_content = """Name,start_timestamp,end_timestamp
+Task1,2024-01-01T10:00:00,2024-01-01T11:00:00"""
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f:
+            f.write(csv_content)
+            temp_file = f.name
+
+        try:
+            with patch(
+                "sys.argv",
+                ["csv_to_mermaid_gantt", temp_file, "--html", "--no-histogram"],
+            ):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    main()
+                    output = mock_stdout.getvalue()
+                    assert "Timeline Chart" in output
+                    assert "Event Histogram" not in output
+                    assert "Line Graph" in output
+        finally:
+            os.unlink(temp_file)
+
+    def test_main_html_output_to_file(self) -> None:
+        """Test main function with HTML output to file."""
+        csv_content = """Name,start_timestamp,end_timestamp
+Task1,2024-01-01T10:00:00,2024-01-01T11:00:00"""
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f:
+            f.write(csv_content)
+            temp_file = f.name
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".html"
+        ) as output_f:
+            output_file = output_f.name
+
+        try:
+            with patch(
+                "sys.argv",
+                ["csv_to_mermaid_gantt", temp_file, "--html", "-o", output_file],
+            ):
+                main()
+                # Check that the output file was created and contains HTML
+                with open(output_file, "r") as f:
+                    output = f.read()
+                    assert "<!DOCTYPE html>" in output
+                    assert "Plotly" in output
+        finally:
+            os.unlink(temp_file)
+            if os.path.exists(output_file):
+                os.unlink(output_file)
+
+    def test_main_html_output_from_stdin(self) -> None:
+        """Test main function with HTML output from stdin."""
+        csv_content = """Name,start_timestamp,end_timestamp
+Task1,2024-01-01T10:00:00,2024-01-01T11:00:00"""
+
+        with patch("sys.argv", ["csv_to_mermaid_gantt", "--html"]):
+            with patch("sys.stdin", StringIO(csv_content)):
+                with patch("sys.stdout", new_callable=StringIO) as mock_stdout:
+                    main()
+                    output = mock_stdout.getvalue()
+                    assert "<!DOCTYPE html>" in output
+                    assert "stdin" in output
