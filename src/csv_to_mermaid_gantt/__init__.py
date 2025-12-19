@@ -554,11 +554,8 @@ def main() -> None:
         # Read input
         if args.input_file:
             # For backward compatibility, take only the first file for Mermaid output
-            input_path = (
-                args.input_file[0]
-                if isinstance(args.input_file, list)
-                else args.input_file
-            )
+            # args.input_file is always a list due to nargs="*"
+            input_path = args.input_file[0]
             log_verbose(f"Reading input from file: {input_path}", verbose)
             with open(input_path, "r", encoding="utf-8-sig") as f:
                 csv_content = f.read()
