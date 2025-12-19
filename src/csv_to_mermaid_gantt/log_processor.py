@@ -362,14 +362,17 @@ def parse_log_timestamp(
     # Normalize time string (replace . or - with :)
     time_normalized = time_str.replace(".", ":").replace("-", ":")
 
-    # Try various date formats
+    # Try various date formats in order of preference
+    # Note: DD/MM/YYYY vs MM/DD/YYYY is ambiguous for dates like 01/02/2025.
+    # We try DD/MM/YYYY first as it's more common internationally.
+    # For unambiguous dates (e.g., 25/01/2025), only DD/MM/YYYY will succeed.
     date_formats = [
-        "%d/%m/%Y",  # DD/MM/YYYY
-        "%m/%d/%Y",  # MM/DD/YYYY (ambiguous, but try it)
-        "%Y-%m-%d",  # YYYY-MM-DD
-        "%d-%m-%Y",  # DD-MM-YYYY
-        "%m-%d-%Y",  # MM-DD-YYYY
-        "%d.%m.%Y",  # DD.MM.YYYY
+        "%d/%m/%Y",  # DD/MM/YYYY (preferred for slash-separated)
+        "%m/%d/%Y",  # MM/DD/YYYY (fallback for slash-separated)
+        "%Y-%m-%d",  # YYYY-MM-DD (ISO format, unambiguous)
+        "%d-%m-%Y",  # DD-MM-YYYY (European format)
+        "%m-%d-%Y",  # MM-DD-YYYY (US format)
+        "%d.%m.%Y",  # DD.MM.YYYY (European format)
     ]
 
     for date_format in date_formats:
@@ -525,7 +528,10 @@ def parse_log_csv(csv_content: str, verbose: bool = False) -> List[Dict[str, str
                 log_entries.append(normalized_row)
     else:
         # Use column mapping
-        assert column_mapping is not None
+        if column_mapping is None:
+            raise ValueError(
+                "Column mapping is not available. Cannot parse log entries."
+            )
         log_verbose(f"Using column mapping: {column_mapping}", verbose)
 
         for row_data in data_rows:
