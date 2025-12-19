@@ -388,11 +388,17 @@ class TestConvertLogToCsv:
 
     def test_convert_log_with_multiple_connections(self) -> None:
         """Test converting log with multiple connections."""
-        log_content = """Date,Time,Action,Process,Protocol,LocalAddr,RemoteAddr
-18/12/2025,13.00.54,Added,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
-18/12/2025,13.00.56,Removed,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
-18/12/2025,13.01.00,Added,anotherProcess.exe,TCP,10.10.0.1:58101,123.123.123.123:443
-18/12/2025,13.01.30,Removed,anotherProcess.exe,TCP,10.10.0.1:58101,123.123.123.123:443"""  # noqa: E501
+        log_content = (
+            "Date,Time,Action,Process,Protocol,LocalAddr,RemoteAddr\n"
+            "18/12/2025,13.00.54,Added,processName.exe,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\n"
+            "18/12/2025,13.00.56,Removed,processName.exe,TCP,"
+            "10.10.0.1:58100,123.123.123.123:443\n"
+            "18/12/2025,13.01.00,Added,anotherProcess.exe,TCP,"
+            "10.10.0.1:58101,123.123.123.123:443\n"
+            "18/12/2025,13.01.30,Removed,anotherProcess.exe,TCP,"
+            "10.10.0.1:58101,123.123.123.123:443"
+        )
 
         result = convert_log_to_csv(log_content)
         lines = result.split("\n")
