@@ -166,6 +166,53 @@ updTcpIpConnectState,2025-12-12 08:01:10,2025-12-12 08:02:30
 
 With the default 60-second threshold, these two tasks (gap of 49 seconds) will be combined into a single continuous task from `07:59:00` to `08:02:30`.
 
+### Processing network connection logs
+
+The tool can process network connection log files with Added/Removed events and automatically convert them to timeline format:
+
+```bash
+# Process log format with --log-format flag
+csv-to-mermaid-gantt connection_log.csv --log-format
+
+# Generate HTML visualization from log format
+csv-to-mermaid-gantt connection_log.csv --log-format --html -o timeline.html
+```
+
+**Log Format:**
+
+The log format expects CSV with the following columns:
+- `Date`: Date in DD/MM/YYYY format
+- `Time`: Time in HH.MM.SS format
+- `Action`: Either "Added" or "Removed"
+- `Process`: Process name (or "Unknown")
+- `Protocol`: Protocol type (e.g., "TCP", "UDP")
+- `LocalAddr`: Local address in ip:port format
+- `RemoteAddr`: Remote address in ip:port format
+
+Example log CSV:
+
+```csv
+Date,Time,Action,Process,Protocol,LocalAddr,RemoteAddr
+18/12/2025,13.00.54,Added,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
+18/12/2025,13.00.56,Added,Unknown,TCP,10.10.0.1:58100,123.123.123.123:443
+18/12/2025,13.00.56,Removed,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
+18/12/2025,13.02.55,Removed,Unknown,TCP,10.10.0.1:58100,123.123.123.123:443
+```
+
+**Connection Matching:**
+
+The tool matches Added and Removed events based on the connection identifier (local_ip:local_port,remote_ip:remote_port):
+- Each complete connection typically has 2 "Added" and 2 "Removed" events
+- Events are matched to create start/end timestamps for the timeline
+- The process name is extracted from non-"Unknown" entries
+
+**Handling Incomplete Data:**
+
+The tool gracefully handles incomplete log data:
+- **Removed events without Added events**: Connection started before logging began (uses earliest Removed timestamp as start)
+- **Added events without Removed events**: Connection ongoing when logging ended (uses Added timestamp for both start and end)
+- **Connection reuse**: The same connection identifier may be reused after removal
+
 ### As a Python module
 
 ```python
@@ -205,6 +252,34 @@ print(combined_output)
 # Disable combining
 separate_output = convert_csv_to_mermaid(combined_csv, combine_threshold=None)
 print(separate_output)
+```
+
+#### Processing Network Connection Logs from Python
+
+```python
+from csv_to_mermaid_gantt.log_processor import convert_log_to_csv
+from csv_to_mermaid_gantt import convert_csv_to_mermaid
+
+# Network connection log format
+log_content = """Date,Time,Action,Process,Protocol,LocalAddr,RemoteAddr
+18/12/2025,13.00.54,Added,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
+18/12/2025,13.00.56,Added,Unknown,TCP,10.10.0.1:58100,123.123.123.123:443
+18/12/2025,13.00.56,Removed,processName.exe,TCP,10.10.0.1:58100,123.123.123.123:443
+18/12/2025,13.02.55,Removed,Unknown,TCP,10.10.0.1:58100,123.123.123.123:443"""
+
+# Convert log format to standard CSV format
+standard_csv = convert_log_to_csv(log_content)
+print(standard_csv)
+# Output:
+# Name,start_timestamp,end_timestamp
+# "processName.exe (TCP): 10.10.0.1:58100 -> 123.123.123.123:443",
+#   2025-12-18 13:00:54,2025-12-18 13:02:55
+
+# Generate Mermaid diagram from converted log
+mermaid_output = convert_csv_to_mermaid(
+    standard_csv, title="Network Connection Timeline"
+)
+print(mermaid_output)
 ```
 
 #### Generating HTML Visualizations from Python
