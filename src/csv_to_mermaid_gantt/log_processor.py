@@ -477,6 +477,34 @@ def parse_log_csv(csv_content: str, verbose: bool = False) -> List[Dict[str, str
             standard_headers = True
             log_verbose("Standard headers detected, using them directly", verbose)
 
+    # Validate CSV structure: check column count consistency
+    if has_headers and headers and data_rows:
+        header_count = len(headers)
+        # Sample first few rows to check for column count mismatches
+        sample_size = min(10, len(data_rows))
+        mismatched_rows = []
+        
+        for i, row in enumerate(data_rows[:sample_size]):
+            # Skip empty rows
+            if not any(value and value.strip() for value in row):
+                continue
+            row_count = len(row)
+            if row_count != header_count:
+                mismatched_rows.append((i + 2, row_count))  # +2 for 1-indexed and header row
+        
+        if mismatched_rows:
+            mismatch_details = ", ".join(
+                f"row {row_num} has {col_count} columns"
+                for row_num, col_count in mismatched_rows
+            )
+            raise ValueError(
+                f"CSV structure error: Header row has {header_count} columns, "
+                f"but data rows have different column counts. {mismatch_details}. "
+                f"This usually means the header is missing a column name (e.g., 'Date'). "
+                f"Please ensure all rows have the same number of columns as the header. "
+                f"Expected headers: {list(expected_headers)}"
+            )
+
     # Auto-detect columns if needed
     column_mapping = None
     if not standard_headers:
